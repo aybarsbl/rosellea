@@ -1,0 +1,55 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "exit",
+      "description": "Kullanıcı sohbeti, oturumu veya programı sonlandırmak istediğinde bu fonksiyonu çağır. Örneğin 'görüşürüz', 'çıkış yap', 'kapat', 'bitir' gibi ifadelerde kullan.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "show_camera",
+      "description": "Kullanıcı kamera görüntüsünü açmak/göstermek istediğinde bu fonksiyonu çağır. Örneğin 'kamerayı aç', 'kamerayı göster', 'görüntüyü aç' gibi ifadelerde kullan.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "show_hands",
+      "description": "Kullanıcı el takibi/el algılama penceresini açmak istediğinde bu fonksiyonu çağır. Kameradan gelen görüntü üzerinde ellerin iskeletini ve eklem noktalarını gösterir. Örneğin 'elleri göster', 'el takibini aç', 'ellerimi algıla' gibi ifadelerde kullan.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "log",
+      "description": "Her fonksiyon çağrısından ÖNCE MUTLAKA bu fonksiyonu da çağır. Amacı, birazdan çalıştırılacak fonksiyonun yapacağı işi kullanıcıya önceden bildiren kısa bir mesaj iletmektir. Yani tek başına asla çağrılmaz; her zaman başka bir fonksiyonla birlikte, onun hemen öncesinde çağrılır. İçerik konuşma geçmişine asistan mesajı olarak eklenir ve kullanıcıya iletilir.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Birazdan çağrılacak fonksiyonun yapacağı işi kullanıcıya önceden bildiren kısa, doğal bir mesaj. Örn: 'Tamamdır, çıkış yapıyorum.'"
+          }
+        },
+        "required": ["content"]
+      }
+    }
+  }
+]

@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: psycopg3
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: database
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d database"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE: postgresql://user:password@127.0.0.1:5432/database
+    network_mode: host
+    # BLE/Wi-Fi provisioning host BlueZ ve NetworkManager'a D-Bus üzerinden
+    # erişir. Bu dizinler bağlanmazsa Provisioning ve wifi.connect() çalışmaz.
+    privileged: true
+    volumes:
+      - ./data:/app/data
+      - /var/run/dbus:/var/run/dbus
+      - /run/dbus:/run/dbus
+
+volumes:
+  postgres_data:

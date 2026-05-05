@@ -1,0 +1,80 @@
+{
+  "expo": {
+    "name": "frontend",
+    "slug": "frontend",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "frontend",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "Robotunla bağlantı kurmak ve Wi-Fi bilgisini iletmek için Bluetooth gerekir.",
+        "NSBluetoothPeripheralUsageDescription": "Robotuna Wi-Fi bilgisini iletmek için Bluetooth gerekir.",
+        "NSLocalNetworkUsageDescription": "Robotunu yerel ağda bulmak için ağ erişimi gerekir.",
+        "NSBonjourServices": [
+          "_rosellea._tcp"
+        ]
+      }
+    },
+    "android": {
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN"
+      ],
+      "package": "com.aybarsbl.frontend"
+    },
+    "web": {
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#020617",
+          "image": "./assets/images/logo.png",
+          "imageWidth": 200,
+          "dark": {
+            "backgroundColor": "#020617",
+            "image": "./assets/images/logo.png"
+          }
+        }
+      ],
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "modes": [
+            "central"
+          ],
+          "bluetoothAlwaysPermission": "Robotunla bağlantı kurmak için Bluetooth gerekir."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d9a99e3f-9002-47e9-a2a9-3dcc7751d047"
+      }
+    }
+  }
+}
