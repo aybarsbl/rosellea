@@ -7,12 +7,18 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from funcs import wifi
 from funcs.env import Environment
 
 
 class EnvPatch(BaseModel):
     key: str
     value: Any
+
+
+class WifiCredentials(BaseModel):
+    ssid: str
+    password: str = ""
 
 
 class Server:
@@ -71,6 +77,23 @@ class Server:
             if self.setup_ready is not None:
                 self.setup_ready.set()
             return {"ok": True}
+
+        @self.app.get("/wifi/scan")
+        def wifi_scan():
+            return {"current": wifi.current_ssid(), "networks": wifi.scan()}
+
+        @self.app.post("/wifi/connect")
+        def wifi_connect(creds: WifiCredentials):
+            ssid = creds.ssid.strip()
+            if not ssid:
+                raise HTTPException(status_code=400, detail="ssid boş olamaz")
+            ok = wifi.connect(ssid, creds.password)
+            if not ok:
+                raise HTTPException(status_code=400, detail="Wi-Fi'a bağlanılamadı")
+            ip = wifi.local_ip()
+            if not ip:
+                raise HTTPException(status_code=500, detail="IP alınamadı")
+            return {"ok": True, "ip": ip}
 
     def start(self, wait_timeout: float = 5.0):
         if self._thread and self._thread.is_alive():

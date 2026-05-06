@@ -9,7 +9,7 @@ import {
 import { getByPath, patchEnvBulk, EnvPatch } from "../lib/api";
 import { Contact, EnvOptions } from "../lib/envTypes";
 import { ContactsEditor } from "./ContactsEditor";
-import { SegmentedSelector } from "./SegmentedSelector";
+import { Dropdown } from "./Dropdown";
 
 export type FieldKey =
   | "name"
@@ -236,7 +236,7 @@ export function RobotSettingsForm({
       )}
 
       {has("assistantModel") && (
-        <SegmentedSelector
+        <Dropdown
           label="Asistan Modeli"
           options={assistantModelOptions}
           value={assistantModel}
@@ -246,7 +246,7 @@ export function RobotSettingsForm({
       )}
 
       {has("elabsModel") && (
-        <SegmentedSelector
+        <Dropdown
           label="Ses Modeli"
           options={elabsModelOptions}
           value={elabsModel}
@@ -256,7 +256,7 @@ export function RobotSettingsForm({
       )}
 
       {has("elabsOutput") && (
-        <SegmentedSelector
+        <Dropdown
           label="Ses Kalitesi"
           options={elabsOutputOptions}
           value={elabsOutput}
@@ -266,7 +266,7 @@ export function RobotSettingsForm({
       )}
 
       {has("elabsVoice") && (
-        <SegmentedSelector
+        <Dropdown
           label="Ses"
           options={elabsVoiceOptions}
           value={elabsVoice}

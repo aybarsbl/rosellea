@@ -16,14 +16,19 @@ SERVICE_UUID = "b2e7c8f0-1a4d-4e6f-9b8c-2d3e4f5a6b7c"
 CHAR_WIFI_UUID = "b2e7c8f0-1a4d-4e6f-9b8c-2d3e4f5a6b71"
 CHAR_STATUS_UUID = "b2e7c8f0-1a4d-4e6f-9b8c-2d3e4f5a6b72"
 CHAR_IP_UUID = "b2e7c8f0-1a4d-4e6f-9b8c-2d3e4f5a6b73"
+CHAR_SCAN_UUID = "b2e7c8f0-1a4d-4e6f-9b8c-2d3e4f5a6b74"
 
 
 class Provisioning:
     """BLE GATT peripheral. Wi-Fi credentials alır, ağa bağlanır, IP'yi
-    notify ile telefona bildirir, sonra GATT server'ı kapatır.
+    notify ile telefona bildirir. Server kalıcıdır — Wi-Fi gelse bile açık
+    kalır, böylece kullanıcı sonradan yeni Wi-Fi credentials gönderebilir.
 
-    main.py içinden ayrı bir thread olarak start() ile çalıştırılır.
-    Wi-Fi zaten bağlıysa hiç başlatılmamalı (pil tüketimi).
+    Karakteristikler:
+      - WIFI: write    {ssid, password} JSON
+      - STATUS: read/notify  idle|connecting|connected|failed|scanning
+      - IP: read/notify       son alınan IP (utf-8 string)
+      - SCAN: write/read/notify  write -> tarama tetikler, sonuç JSON dizi
     """
 
     def __init__(self, name: str, on_complete: Callable[[str], None] | None = None):
@@ -89,6 +94,15 @@ class Provisioning:
             bytearray(b""),
             GATTAttributePermissions.readable,
         )
+        await self._server.add_new_characteristic(
+            SERVICE_UUID,
+            CHAR_SCAN_UUID,
+            GATTCharacteristicProperties.write
+            | GATTCharacteristicProperties.read
+            | GATTCharacteristicProperties.notify,
+            bytearray(b"[]"),
+            GATTAttributePermissions.readable | GATTAttributePermissions.writeable,
+        )
 
         await self._server.start()
         try:
@@ -110,8 +124,13 @@ class Provisioning:
         value: bytearray,
         **kwargs,
     ):
-        if str(characteristic.uuid).lower() != CHAR_WIFI_UUID:
-            return
+        uuid = str(characteristic.uuid).lower()
+        if uuid == CHAR_WIFI_UUID:
+            self._handle_wifi_write(value)
+        elif uuid == CHAR_SCAN_UUID:
+            self._handle_scan_write()
+
+    def _handle_wifi_write(self, value: bytearray):
         try:
             payload = json.loads(bytes(value).decode("utf-8"))
             ssid = str(payload.get("ssid", "")).strip()
@@ -120,18 +139,34 @@ class Provisioning:
             self._publish_status(b"failed")
             return
 
-        if not ssid or not password:
+        if not ssid:
             self._publish_status(b"failed")
             return
 
-        # Wi-Fi bağlantısı subprocess çağrısı yapar, event loop'u bloklamamak
-        # için ayrı thread'de çalıştır.
         threading.Thread(
             target=self._connect_wifi,
             args=(ssid, password),
             name="rosellea-wifi-connect",
             daemon=True,
         ).start()
+
+    def _handle_scan_write(self):
+        # Scan blocking subprocess; event loop'u tıkamamak için ayrı thread.
+        threading.Thread(
+            target=self._run_scan,
+            name="rosellea-wifi-scan",
+            daemon=True,
+        ).start()
+
+    def _run_scan(self):
+        self._publish_status(b"scanning")
+        networks = wifi.scan()
+        try:
+            payload = json.dumps(networks, ensure_ascii=False).encode("utf-8")
+        except (TypeError, ValueError):
+            payload = b"[]"
+        self._update_char(CHAR_SCAN_UUID, payload)
+        self._publish_status(b"idle")
 
     def _connect_wifi(self, ssid: str, password: str):
         self._publish_status(b"connecting")

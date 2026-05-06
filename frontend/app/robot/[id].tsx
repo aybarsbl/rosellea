@@ -12,8 +12,20 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { RobotSettingsForm, FieldKey } from "../../components/RobotSettingsForm";
-import { getEnv, getHealth, Health } from "../../lib/api";
-import { getRobot, removeRobot, Robot } from "../../lib/storage";
+import { WifiPicker } from "../../components/WifiPicker";
+import {
+  getEnv,
+  getHealth,
+  getWifiScan,
+  Health,
+  postWifiConnect,
+} from "../../lib/api";
+import {
+  getRobot,
+  removeRobot,
+  Robot,
+  updateRobotHost,
+} from "../../lib/storage";
 
 const ALL_FIELDS: FieldKey[] = [
   "name",
@@ -36,6 +48,8 @@ export default function RobotDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [showWifi, setShowWifi] = useState(false);
+  const [currentSsid, setCurrentSsid] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +85,24 @@ export default function RobotDetail() {
   }, [id, reloadKey]);
 
   const handleSaved = async () => {
+    setReloadKey((k) => k + 1);
+  };
+
+  const handleWifiScan = async () => {
+    if (!robot) return [];
+    const res = await getWifiScan(robot.host);
+    setCurrentSsid(res.current);
+    return res.networks;
+  };
+
+  const handleWifiConnect = async (ssid: string, password: string) => {
+    if (!robot) throw new Error("Robot bulunamadı.");
+    const res = await postWifiConnect(robot.host, ssid, password);
+    if (res.ip && res.ip !== robot.host) {
+      await updateRobotHost(robot.id, res.ip);
+      setRobot({ ...robot, host: res.ip });
+    }
+    setShowWifi(false);
     setReloadKey((k) => k + 1);
   };
 
@@ -129,6 +161,28 @@ export default function RobotDetail() {
           </Text>
         </View>
 
+        <Pressable
+          onPress={() => setShowWifi((v) => !v)}
+          style={({ pressed }) => [
+            styles.wifiToggle,
+            pressed && styles.wifiTogglePressed,
+          ]}
+        >
+          <Text style={styles.wifiToggleText}>
+            {showWifi ? "Wi-Fi Ayarını Kapat" : "Wi-Fi'yı Değiştir"}
+          </Text>
+        </Pressable>
+
+        {showWifi && (
+          <WifiPicker
+            scan={handleWifiScan}
+            connect={handleWifiConnect}
+            currentSsid={currentSsid}
+            connectLabel="Yeni Ağa Bağla"
+            busyLabel="Bağlanılıyor..."
+          />
+        )}
+
         <RobotSettingsForm
           key={reloadKey}
           host={robot.host}
@@ -177,6 +231,16 @@ const styles = StyleSheet.create({
   statusOk: { backgroundColor: "#14532d", color: "#86efac" },
   statusOff: { backgroundColor: "#7f1d1d", color: "#fca5a5" },
   error: { color: "#ef4444", fontSize: 13 },
+  wifiToggle: {
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#1e293b",
+    backgroundColor: "#0f172a",
+  },
+  wifiTogglePressed: { backgroundColor: "#172033" },
+  wifiToggleText: { color: "#cbd5e1", fontSize: 14, fontWeight: "500" },
   danger: {
     paddingVertical: 12,
     borderRadius: 12,

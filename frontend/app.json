@@ -1,6 +1,7 @@
 {
   "expo": {
-    "name": "frontend",
+    "name": "Rosellea",
+    "icon": "./assets/images/logo.jpg",
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -13,9 +14,7 @@
         "NSBluetoothAlwaysUsageDescription": "Robotunla bağlantı kurmak ve Wi-Fi bilgisini iletmek için Bluetooth gerekir.",
         "NSBluetoothPeripheralUsageDescription": "Robotuna Wi-Fi bilgisini iletmek için Bluetooth gerekir.",
         "NSLocalNetworkUsageDescription": "Robotunu yerel ağda bulmak için ağ erişimi gerekir.",
-        "NSBonjourServices": [
-          "_rosellea._tcp"
-        ]
+        "NSBonjourServices": ["_rosellea._tcp"]
       }
     },
     "android": {
@@ -39,11 +38,11 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#020617",
-          "image": "./assets/images/logo.png",
+          "image": "./assets/images/logo.jpg",
           "imageWidth": 200,
           "dark": {
             "backgroundColor": "#020617",
-            "image": "./assets/images/logo.png"
+            "image": "./assets/images/logo.jpg"
           }
         }
       ],
@@ -51,9 +50,7 @@
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": false,
-          "modes": [
-            "central"
-          ],
+          "modes": ["central"],
           "bluetoothAlwaysPermission": "Robotunla bağlantı kurmak için Bluetooth gerekir."
         }
       ],

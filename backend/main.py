@@ -144,29 +144,33 @@ def stop():
     threads.show()
 
 
+def _on_provisioned(ip: str):
+    # BLE'den yeni Wi-Fi credentials alındığında çağrılır. HTTP/Discovery
+    # zaten started kontrolü yapıyor, bu yüzden idempotent — Wi-Fi varken
+    # tekrar credentials yazılırsa bu callback yine güvenle çalışır.
+    print(f"[provisioning] connected, ip={ip}")
+    HttpServer.start()
+    Discovery.start()
+
+
 def start():
     is_active.set()
     quit.clear()
+
+    # BLE peripheral en başta. Wi-Fi olsa bile arka planda açık kalır;
+    # kullanıcı sonradan telefonla yeni Wi-Fi credentials gönderebilir.
+    Provisioning.on_complete = _on_provisioned
+    Provisioning.start()
 
     if wifi.is_connected():
         HttpServer.start()
         Discovery.start()
     else:
-        # Wi-Fi yok: BLE peripheral'i aç, kullanıcı telefondan provisioning yapsın.
-        # AI/Mic/Cam alt sistemleri internet ister, bu yüzden Wi-Fi gelene kadar
-        # hiçbiri başlatılmıyor — sadece BLE çalışıyor.
-        print("[main] Wi-Fi bağlantısı yok, BLE provisioning başlatılıyor...")
-        wifi_ready = threading.Event()
-        Provisioning.on_complete = lambda ip: (
-            print(f"[provisioning] connected, ip={ip}"),
-            HttpServer.start(),
-            Discovery.start(),
-            wifi_ready.set(),
-        )
-        Provisioning.start()
+        print("[main] Wi-Fi yok, BLE provisioning bekleniyor...")
         while not quit.is_set():
-            if wifi_ready.wait(timeout=0.5):
+            if wifi.is_connected():
                 break
+            time.sleep(0.5)
         if quit.is_set():
             stop()
             return

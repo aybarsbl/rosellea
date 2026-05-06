@@ -44,7 +44,7 @@ export default function AddScan() {
     try {
       await provisioner.connect(device.id);
       setDevice(device);
-      router.push("/add/wifi");
+      router.push("/add/setup");
     } catch (e: any) {
       setError(e?.message ?? "Bağlanılamadı.");
     }

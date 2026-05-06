@@ -1,3 +1,5 @@
+import { WifiNetwork } from "./bleProtocol";
+
 const PORT = 8000;
 
 export type Health = {
@@ -9,6 +11,11 @@ export type Health = {
 export type EnvPatch = {
   key: string;
   value: unknown;
+};
+
+export type WifiScanResponse = {
+  current: string | null;
+  networks: WifiNetwork[];
 };
 
 function url(host: string, path: string) {
@@ -48,6 +55,34 @@ export async function patchEnvBulk(
 export async function postSetupComplete(host: string): Promise<void> {
   const res = await fetch(url(host, "/setup/complete"), { method: "POST" });
   if (!res.ok) throw new Error(`POST /setup/complete failed: ${res.status}`);
+}
+
+export async function getWifiScan(host: string): Promise<WifiScanResponse> {
+  const res = await fetch(url(host, "/wifi/scan"));
+  if (!res.ok) throw new Error(`GET /wifi/scan failed: ${res.status}`);
+  return res.json();
+}
+
+export async function postWifiConnect(
+  host: string,
+  ssid: string,
+  password: string,
+): Promise<{ ip: string }> {
+  const res = await fetch(url(host, "/wifi/connect"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ssid, password }),
+  });
+  if (!res.ok) {
+    let detail = "";
+    try {
+      detail = (await res.json())?.detail ?? "";
+    } catch {
+      // ignore
+    }
+    throw new Error(detail || `POST /wifi/connect failed: ${res.status}`);
+  }
+  return res.json();
 }
 
 export function getByPath(env: Record<string, unknown>, key: string): unknown {

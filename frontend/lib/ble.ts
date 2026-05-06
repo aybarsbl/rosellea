@@ -1,10 +1,12 @@
 import { PermissionsAndroid, Platform } from "react-native";
 import {
   BLE_CHAR_IP_UUID,
+  BLE_CHAR_SCAN_UUID,
   BLE_CHAR_STATUS_UUID,
   BLE_CHAR_WIFI_UUID,
   BLE_DEVICE_NAME_PREFIX,
   BLE_SERVICE_UUID,
+  WifiNetwork,
 } from "./bleProtocol";
 
 export type DiscoveredDevice = {
@@ -20,6 +22,7 @@ export type ProvisioningResult = {
 export interface BleProvisioner {
   scan(timeoutMs?: number): Promise<DiscoveredDevice[]>;
   connect(deviceId: string): Promise<void>;
+  scanWifi(timeoutMs?: number): Promise<WifiNetwork[]>;
   sendWifi(ssid: string, password: string): Promise<void>;
   awaitIp(timeoutMs?: number): Promise<ProvisioningResult>;
   disconnect(): Promise<void>;
@@ -39,9 +42,20 @@ class MockBleProvisioner implements BleProvisioner {
     this.connectedId = deviceId;
   }
 
+  async scanWifi(timeoutMs = 1500): Promise<WifiNetwork[]> {
+    if (!this.connectedId) throw new Error("Önce robota bağlanın.");
+    await delay(timeoutMs);
+    return [
+      { ssid: "Ev_Wifi", signal: 82, secure: true },
+      { ssid: "Ev_Wifi_5G", signal: 64, secure: true },
+      { ssid: "Misafir", signal: 48, secure: false },
+      { ssid: "TP-Link_2A4F", signal: 31, secure: true },
+    ];
+  }
+
   async sendWifi(ssid: string, password: string): Promise<void> {
     if (!this.connectedId) throw new Error("Önce robota bağlanın.");
-    if (!ssid || !password) throw new Error("Wi-Fi adı ve parola zorunlu.");
+    if (!ssid) throw new Error("Wi-Fi adı zorunlu.");
     await delay(500);
     this.wifiSent = true;
   }
@@ -139,9 +153,69 @@ class RealBleProvisioner implements BleProvisioner {
     }
   }
 
+  async scanWifi(timeoutMs = 12000): Promise<WifiNetwork[]> {
+    if (!this.device) throw new Error("Önce robota bağlanın.");
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const subscription = this.device.monitorCharacteristicForService(
+        BLE_SERVICE_UUID,
+        BLE_CHAR_SCAN_UUID,
+        (error: any, characteristic: any) => {
+          if (settled) return;
+          if (error) {
+            settled = true;
+            reject(error);
+            return;
+          }
+          const value: string | null = characteristic?.value ?? null;
+          if (!value) return;
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(fromBase64(value));
+          } catch {
+            return;
+          }
+          if (!Array.isArray(parsed) || parsed.length === 0) return;
+          const networks = parsed
+            .filter(
+              (n): n is { ssid: string; signal?: number; secure?: boolean } =>
+                !!n && typeof n === "object" && typeof (n as any).ssid === "string",
+            )
+            .map((n) => ({
+              ssid: n.ssid,
+              signal: typeof n.signal === "number" ? n.signal : 0,
+              secure: typeof n.secure === "boolean" ? n.secure : true,
+            }));
+          settled = true;
+          subscription?.remove?.();
+          resolve(networks);
+        },
+      );
+      // Tarama tetikleme: scan karakteristiğine boş write.
+      this.device
+        .writeCharacteristicWithResponseForService(
+          BLE_SERVICE_UUID,
+          BLE_CHAR_SCAN_UUID,
+          toBase64(""),
+        )
+        .catch((err: any) => {
+          if (settled) return;
+          settled = true;
+          subscription?.remove?.();
+          reject(err);
+        });
+      setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        subscription?.remove?.();
+        reject(new Error("Wi-Fi taraması zaman aşımına uğradı."));
+      }, timeoutMs);
+    });
+  }
+
   async sendWifi(ssid: string, password: string): Promise<void> {
     if (!this.device) throw new Error("Önce robota bağlanın.");
-    if (!ssid || !password) throw new Error("Wi-Fi adı ve parola zorunlu.");
+    if (!ssid) throw new Error("Wi-Fi adı zorunlu.");
     const payload = JSON.stringify({ ssid, password });
     const base64 = toBase64(payload);
     await this.device.writeCharacteristicWithResponseForService(
