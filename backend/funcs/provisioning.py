@@ -119,7 +119,10 @@ class Provisioning:
     # ---- characteristic callbacks ----
 
     def _on_read(self, characteristic: BlessGATTCharacteristic, **kwargs) -> bytearray:
-        return characteristic.value
+        uuid = str(characteristic.uuid).lower()
+        val = characteristic.value
+        print(f"[provisioning] READ uuid={uuid[-4:]} -> {len(val)} bytes")
+        return val
 
     def _on_write(
         self,
@@ -162,6 +165,7 @@ class Provisioning:
         ).start()
 
     def _run_scan(self):
+        print("[provisioning] SCAN start")
         # Telefon tarama sonucunu BLE Read ile alıyor (Notify MTU sınırına
         # takılıyor, büyük JSON payload tek notification paketine sığmaz).
         # SCAN char'ı sentinel'e ("null") sıfırla → telefon "idle" notify'ı
@@ -169,10 +173,12 @@ class Provisioning:
         self._update_char(CHAR_SCAN_UUID, b"null")
         self._publish_status(b"scanning")
         networks = wifi.scan()
+        print(f"[provisioning] SCAN got {len(networks)} networks")
         try:
             payload = json.dumps(networks, ensure_ascii=False).encode("utf-8")
         except (TypeError, ValueError):
             payload = b"[]"
+        print(f"[provisioning] SCAN payload {len(payload)} bytes -> store + status idle")
         self._update_char(CHAR_SCAN_UUID, payload)
         self._publish_status(b"idle")
 

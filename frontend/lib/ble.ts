@@ -176,14 +176,26 @@ class RealBleProvisioner implements BleProvisioner {
       // chunk'lanır ve tam payload'ı getirir.
       const tryReadResult = async (): Promise<boolean> => {
         try {
+          console.log("[scanWifi] reading SCAN characteristic...");
           const ch = await device.readCharacteristicForService(
             BLE_SERVICE_UUID,
             BLE_CHAR_SCAN_UUID,
           );
           const value: string | null = ch?.value ?? null;
+          console.log("[scanWifi] read raw base64 length:", value?.length ?? 0);
           if (!value) return false;
-          const parsed = JSON.parse(fromBase64(value));
-          if (parsed === null) return false; // sentinel: scan henüz hazır değil
+          const text = fromBase64(value);
+          console.log(
+            "[scanWifi] decoded text length:",
+            text.length,
+            "preview:",
+            text.slice(0, 80),
+          );
+          const parsed = JSON.parse(text);
+          if (parsed === null) {
+            console.log("[scanWifi] sentinel null, waiting...");
+            return false;
+          }
           if (!Array.isArray(parsed)) {
             finish(new Error("Tarama verisi geçersiz."));
             return true;
@@ -212,28 +224,37 @@ class RealBleProvisioner implements BleProvisioner {
         BLE_CHAR_STATUS_UUID,
         async (error: any, characteristic: any) => {
           if (settled) return;
-          if (error) return finish(error);
+          if (error) {
+            console.log("[scanWifi] STATUS monitor error:", error?.message ?? error);
+            return finish(error);
+          }
           const raw: string | null = characteristic?.value ?? null;
           if (!raw) return;
           const status = fromBase64(raw).trim();
+          console.log("[scanWifi] STATUS notify:", status);
           if (status === "idle") {
             await tryReadResult();
           }
         },
       );
 
+      console.log("[scanWifi] writing trigger to SCAN char...");
       device
         .writeCharacteristicWithResponseForService(
           BLE_SERVICE_UUID,
           BLE_CHAR_SCAN_UUID,
           toBase64(""),
         )
-        .catch((err: any) => finish(err));
+        .then(() => console.log("[scanWifi] trigger write ok"))
+        .catch((err: any) => {
+          console.log("[scanWifi] trigger write FAILED:", err?.message ?? err);
+          finish(err);
+        });
 
-      timer = setTimeout(
-        () => finish(new Error("Wi-Fi taraması zaman aşımına uğradı.")),
-        timeoutMs,
-      );
+      timer = setTimeout(() => {
+        console.log("[scanWifi] TIMEOUT (no idle status received within window)");
+        finish(new Error("Wi-Fi taraması zaman aşımına uğradı."));
+      }, timeoutMs);
     });
   }
 
