@@ -128,13 +128,10 @@ class Provisioning:
         **kwargs,
     ):
         uuid = str(characteristic.uuid).lower()
-        print(f"[provisioning] write uuid={uuid} bytes={len(value)}")
         if uuid == CHAR_WIFI_UUID:
             self._handle_wifi_write(value)
         elif uuid == CHAR_SCAN_UUID:
             self._handle_scan_write()
-        else:
-            print(f"[provisioning] !! unknown uuid (expected scan={CHAR_SCAN_UUID})")
 
     def _handle_wifi_write(self, value: bytearray):
         try:
@@ -165,15 +162,17 @@ class Provisioning:
         ).start()
 
     def _run_scan(self):
-        print("[provisioning] scan: started")
+        # Telefon tarama sonucunu BLE Read ile alıyor (Notify MTU sınırına
+        # takılıyor, büyük JSON payload tek notification paketine sığmaz).
+        # SCAN char'ı sentinel'e ("null") sıfırla → telefon "idle" notify'ı
+        # gelmeden okusa bile bitmediğini anlar.
+        self._update_char(CHAR_SCAN_UUID, b"null")
         self._publish_status(b"scanning")
         networks = wifi.scan()
-        print(f"[provisioning] scan: got {len(networks)} networks")
         try:
             payload = json.dumps(networks, ensure_ascii=False).encode("utf-8")
         except (TypeError, ValueError):
             payload = b"[]"
-        print(f"[provisioning] scan: payload {len(payload)} bytes -> notify")
         self._update_char(CHAR_SCAN_UUID, payload)
         self._publish_status(b"idle")
 
@@ -219,10 +218,8 @@ class Provisioning:
         try:
             char = self._server.get_characteristic(uuid)
             if char is None:
-                print(f"[provisioning] update: char {uuid} not found")
                 return
             char.value = bytearray(value)
-            ok = self._server.update_value(SERVICE_UUID, uuid)
-            print(f"[provisioning] update_value({uuid[-4:]}) -> {ok}")
-        except Exception as e:
-            print(f"[provisioning] update_value error: {e!r}")
+            self._server.update_value(SERVICE_UUID, uuid)
+        except Exception:
+            pass

@@ -155,62 +155,85 @@ class RealBleProvisioner implements BleProvisioner {
 
   async scanWifi(timeoutMs = 20000): Promise<WifiNetwork[]> {
     if (!this.device) throw new Error("Önce robota bağlanın.");
+    const device = this.device;
     return new Promise((resolve, reject) => {
       let settled = false;
-      const subscription = this.device.monitorCharacteristicForService(
-        BLE_SERVICE_UUID,
-        BLE_CHAR_SCAN_UUID,
-        (error: any, characteristic: any) => {
-          if (settled) return;
-          if (error) {
-            settled = true;
-            reject(error);
-            return;
+      let subscription: any = null;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+
+      const finish = (err: Error | null, result?: WifiNetwork[]) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        subscription?.remove?.();
+        if (err) reject(err);
+        else resolve(result ?? []);
+      };
+
+      // Pi tarama sonucunu SCAN karakteristiğine yazıyor; payload BLE notify
+      // MTU sınırına takılıyor (1.5KB+ vs ~250B), bu yüzden notify'ı kullanmak
+      // yerine STATUS "idle"a düşünce SCAN'i Read ediyoruz — Read otomatik
+      // chunk'lanır ve tam payload'ı getirir.
+      const tryReadResult = async (): Promise<boolean> => {
+        try {
+          const ch = await device.readCharacteristicForService(
+            BLE_SERVICE_UUID,
+            BLE_CHAR_SCAN_UUID,
+          );
+          const value: string | null = ch?.value ?? null;
+          if (!value) return false;
+          const parsed = JSON.parse(fromBase64(value));
+          if (parsed === null) return false; // sentinel: scan henüz hazır değil
+          if (!Array.isArray(parsed)) {
+            finish(new Error("Tarama verisi geçersiz."));
+            return true;
           }
-          const value: string | null = characteristic?.value ?? null;
-          if (!value) return;
-          let parsed: unknown;
-          try {
-            parsed = JSON.parse(fromBase64(value));
-          } catch {
-            return;
-          }
-          // Pi initial sentinel "null" — gerçek sonuç dizi (boş dahi olsa).
-          if (parsed === null || !Array.isArray(parsed)) return;
           const networks = parsed
             .filter(
               (n): n is { ssid: string; signal?: number; secure?: boolean } =>
-                !!n && typeof n === "object" && typeof (n as any).ssid === "string",
+                !!n &&
+                typeof n === "object" &&
+                typeof (n as any).ssid === "string",
             )
             .map((n) => ({
               ssid: n.ssid,
               signal: typeof n.signal === "number" ? n.signal : 0,
               secure: typeof n.secure === "boolean" ? n.secure : true,
             }));
-          settled = true;
-          subscription?.remove?.();
-          resolve(networks);
+          finish(null, networks);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
+      subscription = device.monitorCharacteristicForService(
+        BLE_SERVICE_UUID,
+        BLE_CHAR_STATUS_UUID,
+        async (error: any, characteristic: any) => {
+          if (settled) return;
+          if (error) return finish(error);
+          const raw: string | null = characteristic?.value ?? null;
+          if (!raw) return;
+          const status = fromBase64(raw).trim();
+          if (status === "idle") {
+            await tryReadResult();
+          }
         },
       );
-      // Tarama tetikleme: scan karakteristiğine boş write.
-      this.device
+
+      device
         .writeCharacteristicWithResponseForService(
           BLE_SERVICE_UUID,
           BLE_CHAR_SCAN_UUID,
           toBase64(""),
         )
-        .catch((err: any) => {
-          if (settled) return;
-          settled = true;
-          subscription?.remove?.();
-          reject(err);
-        });
-      setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        subscription?.remove?.();
-        reject(new Error("Wi-Fi taraması zaman aşımına uğradı."));
-      }, timeoutMs);
+        .catch((err: any) => finish(err));
+
+      timer = setTimeout(
+        () => finish(new Error("Wi-Fi taraması zaman aşımına uğradı.")),
+        timeoutMs,
+      );
     });
   }
 
