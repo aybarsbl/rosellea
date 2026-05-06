@@ -37,7 +37,7 @@ class Microphone:
         self._speach = threading.Event()
 
         if start:
-            self._start()
+            self.start()
 
     def _rms_calc(self, data: bytes) -> float:
         count = len(data) // 2
@@ -170,7 +170,7 @@ class Microphone:
 
         return text
 
-    def _start(self):
+    def start(self):
         self._model = WhisperModel(
             self._model_size,
             device="cpu",

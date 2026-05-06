@@ -83,14 +83,14 @@ ELABS = ElevenLabs(api_key=ELABS_API)
 SystemPrompt = prompt.System(
     folder=os.path.join(base_path, llm_folder), file=llm_system, env=_env
 )
-Cam = camera.Camera(start=True)
+Cam = camera.Camera(start=False)
 Mic = microphone.Microphone(
     model_size="small",
     silence_thold=1.0,
     sound_thold=100,
     event=is_active,
     name=SystemPrompt.get_assistant_name(),
-    start=True,
+    start=False,
 )
 MediapipeTasks = human.Tasks(
     download_path=os.path.join(base_path, mediapipe_tasks),
@@ -102,7 +102,7 @@ Hands = human.Hands(
     max_hands=10,
     confidence_scores={"detection": 0.2, "presence": 0.9, "tracking": 0.9},
     event=is_active,
-    start=True,
+    start=False,
 )
 Speaker = speaker.Speaker(
     speaker=ELABS,
@@ -149,15 +149,28 @@ def start():
         HttpServer.start()
         Discovery.start()
     else:
-        # Wi-Fi yok: önce BLE peripheral'i aç, kullanıcı telefonundan
-        # provisioning yapsın. Bağlanınca HTTP + mDNS de başlar.
+        # Wi-Fi yok: BLE peripheral'i aç, kullanıcı telefondan provisioning yapsın.
+        # AI/Mic/Cam alt sistemleri internet ister, bu yüzden Wi-Fi gelene kadar
+        # hiçbiri başlatılmıyor — sadece BLE çalışıyor.
         print("[main] Wi-Fi bağlantısı yok, BLE provisioning başlatılıyor...")
+        wifi_ready = threading.Event()
         Provisioning.on_complete = lambda ip: (
             print(f"[provisioning] connected, ip={ip}"),
             HttpServer.start(),
             Discovery.start(),
+            wifi_ready.set(),
         )
         Provisioning.start()
+        while not quit.is_set():
+            if wifi_ready.wait(timeout=0.5):
+                break
+        if quit.is_set():
+            stop()
+            return
+
+    Cam.start()
+    Hands.start()
+    Mic.start()
 
     Messages.insert("system", SystemPrompt.get())
     Messages.insert("assistant", "[Sistem Başlatıldı]", speak=False)
