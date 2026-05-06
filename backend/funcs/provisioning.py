@@ -94,13 +94,16 @@ class Provisioning:
             bytearray(b""),
             GATTAttributePermissions.readable,
         )
+        # Başlangıç değeri "null" — telefon CCCD subscribe ederken bu sentinel'i
+        # alabilir, gerçek tarama sonucu (boş dizi dahil) "[]" veya doluyla
+        # gelir. JSON null'ı atlatıp diziyi kabul ediyoruz.
         await self._server.add_new_characteristic(
             SERVICE_UUID,
             CHAR_SCAN_UUID,
             GATTCharacteristicProperties.write
             | GATTCharacteristicProperties.read
             | GATTCharacteristicProperties.notify,
-            bytearray(b"[]"),
+            bytearray(b"null"),
             GATTAttributePermissions.readable | GATTAttributePermissions.writeable,
         )
 
@@ -196,6 +199,15 @@ class Provisioning:
         self._update_char(CHAR_IP_UUID, value)
 
     def _update_char(self, uuid: str, value: bytes):
+        # bless BlueZ backend'i karakteristik değer atamasında dbus_next
+        # PropertiesChanged sinyali emit ediyor; bu sinyal asyncio loop'una
+        # bağlı. Worker thread'den çağrılırsa notify sessizce drop oluyor,
+        # bu yüzden her zaman loop thread'ine sıkıştırıyoruz.
+        if not self._server or self._loop is None:
+            return
+        self._loop.call_soon_threadsafe(self._apply_update, uuid, bytes(value))
+
+    def _apply_update(self, uuid: str, value: bytes):
         if not self._server:
             return
         try:

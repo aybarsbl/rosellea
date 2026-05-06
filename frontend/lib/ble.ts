@@ -153,7 +153,7 @@ class RealBleProvisioner implements BleProvisioner {
     }
   }
 
-  async scanWifi(timeoutMs = 12000): Promise<WifiNetwork[]> {
+  async scanWifi(timeoutMs = 20000): Promise<WifiNetwork[]> {
     if (!this.device) throw new Error("Önce robota bağlanın.");
     return new Promise((resolve, reject) => {
       let settled = false;
@@ -175,7 +175,8 @@ class RealBleProvisioner implements BleProvisioner {
           } catch {
             return;
           }
-          if (!Array.isArray(parsed) || parsed.length === 0) return;
+          // Pi initial sentinel "null" — gerçek sonuç dizi (boş dahi olsa).
+          if (parsed === null || !Array.isArray(parsed)) return;
           const networks = parsed
             .filter(
               (n): n is { ssid: string; signal?: number; secure?: boolean } =>
