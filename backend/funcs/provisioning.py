@@ -18,6 +18,13 @@ CHAR_STATUS_UUID = "b2e7c8f0-1a4d-4e6f-9b8c-2d3e4f5a6b72"
 CHAR_IP_UUID = "b2e7c8f0-1a4d-4e6f-9b8c-2d3e4f5a6b73"
 CHAR_SCAN_UUID = "b2e7c8f0-1a4d-4e6f-9b8c-2d3e4f5a6b74"
 
+# BLE GATT attribute max size = 512 byte (spec). Tarama JSON'u sıkça bunu
+# aştığı için payload'ı sayfalara bölüyoruz. Her sayfa: [idx, total, ...chunk]
+# (idx ve total 1'er byte, max 255 sayfa). Phone önce write 0-byte → yeni
+# scan tetikler, scan bitince read → ilk sayfa. Sonraki sayfalar için 1-byte
+# index write → read.
+SCAN_PAGE_SIZE = 460
+
 
 class Provisioning:
     """BLE GATT peripheral. Wi-Fi credentials alır, ağa bağlanır, IP'yi
@@ -39,6 +46,7 @@ class Provisioning:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._server: BlessServer | None = None
         self._stop_event: asyncio.Event | None = None
+        self._scan_pages: list[bytes] = []
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -94,16 +102,15 @@ class Provisioning:
             bytearray(b""),
             GATTAttributePermissions.readable,
         )
-        # Başlangıç değeri "null" — telefon CCCD subscribe ederken bu sentinel'i
-        # alabilir, gerçek tarama sonucu (boş dizi dahil) "[]" veya doluyla
-        # gelir. JSON null'ı atlatıp diziyi kabul ediyoruz.
+        # Başlangıç sentinel'i: idx=0, total=0 → telefon "henüz hazır değil"
+        # diye anlar. Tarama bitince sayfa 0'ın gerçek header+chunk'ı yazılır.
         await self._server.add_new_characteristic(
             SERVICE_UUID,
             CHAR_SCAN_UUID,
             GATTCharacteristicProperties.write
             | GATTCharacteristicProperties.read
             | GATTCharacteristicProperties.notify,
-            bytearray(b"null"),
+            bytearray([0, 0]),
             GATTAttributePermissions.readable | GATTAttributePermissions.writeable,
         )
 
@@ -134,7 +141,7 @@ class Provisioning:
         if uuid == CHAR_WIFI_UUID:
             self._handle_wifi_write(value)
         elif uuid == CHAR_SCAN_UUID:
-            self._handle_scan_write()
+            self._handle_scan_write(value)
 
     def _handle_wifi_write(self, value: bytearray):
         try:
@@ -156,21 +163,38 @@ class Provisioning:
             daemon=True,
         ).start()
 
-    def _handle_scan_write(self):
-        # Scan blocking subprocess; event loop'u tıkamamak için ayrı thread.
-        threading.Thread(
-            target=self._run_scan,
-            name="rosellea-wifi-scan",
-            daemon=True,
-        ).start()
+    def _handle_scan_write(self, value: bytearray):
+        # 0-byte write → yeni tarama; 1-byte write → o indeksli sayfayı
+        # SCAN char değerine yükle (telefon ardından read ile çekecek).
+        if len(value) == 0:
+            threading.Thread(
+                target=self._run_scan,
+                name="rosellea-wifi-scan",
+                daemon=True,
+            ).start()
+        elif len(value) == 1:
+            idx = value[0]
+            if 0 <= idx < len(self._scan_pages):
+                self._update_char(CHAR_SCAN_UUID, self._scan_pages[idx])
+
+    def _build_scan_pages(self, payload: bytes) -> list[bytes]:
+        if not payload:
+            payload = b"[]"
+        chunk = SCAN_PAGE_SIZE
+        total = max(1, (len(payload) + chunk - 1) // chunk)
+        if total > 255:
+            total = 255
+            payload = payload[: total * chunk]
+        pages: list[bytes] = []
+        for i in range(total):
+            piece = payload[i * chunk : (i + 1) * chunk]
+            pages.append(bytes([i, total]) + piece)
+        return pages
 
     def _run_scan(self):
         print("[provisioning] SCAN start")
-        # Telefon tarama sonucunu BLE Read ile alıyor (Notify MTU sınırına
-        # takılıyor, büyük JSON payload tek notification paketine sığmaz).
-        # SCAN char'ı sentinel'e ("null") sıfırla → telefon "idle" notify'ı
-        # gelmeden okusa bile bitmediğini anlar.
-        self._update_char(CHAR_SCAN_UUID, b"null")
+        self._scan_pages = []
+        self._update_char(CHAR_SCAN_UUID, bytes([0, 0]))  # sentinel during scan
         self._publish_status(b"scanning")
         networks = wifi.scan()
         print(f"[provisioning] SCAN got {len(networks)} networks")
@@ -178,8 +202,12 @@ class Provisioning:
             payload = json.dumps(networks, ensure_ascii=False).encode("utf-8")
         except (TypeError, ValueError):
             payload = b"[]"
-        print(f"[provisioning] SCAN payload {len(payload)} bytes -> store + status idle")
-        self._update_char(CHAR_SCAN_UUID, payload)
+        self._scan_pages = self._build_scan_pages(payload)
+        print(
+            f"[provisioning] SCAN payload {len(payload)} bytes -> {len(self._scan_pages)} pages"
+        )
+        if self._scan_pages:
+            self._update_char(CHAR_SCAN_UUID, self._scan_pages[0])
         self._publish_status(b"idle")
 
     def _connect_wifi(self, ssid: str, password: str):

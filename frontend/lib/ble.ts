@@ -153,13 +153,14 @@ class RealBleProvisioner implements BleProvisioner {
     }
   }
 
-  async scanWifi(timeoutMs = 20000): Promise<WifiNetwork[]> {
+  async scanWifi(timeoutMs = 30000): Promise<WifiNetwork[]> {
     if (!this.device) throw new Error("Önce robota bağlanın.");
     const device = this.device;
     return new Promise((resolve, reject) => {
       let settled = false;
       let subscription: any = null;
       let timer: ReturnType<typeof setTimeout> | null = null;
+      let collecting = false;
 
       const finish = (err: Error | null, result?: WifiNetwork[]) => {
         if (settled) return;
@@ -170,35 +171,46 @@ class RealBleProvisioner implements BleProvisioner {
         else resolve(result ?? []);
       };
 
-      // Pi tarama sonucunu SCAN karakteristiğine yazıyor; payload BLE notify
-      // MTU sınırına takılıyor (1.5KB+ vs ~250B), bu yüzden notify'ı kullanmak
-      // yerine STATUS "idle"a düşünce SCAN'i Read ediyoruz — Read otomatik
-      // chunk'lanır ve tam payload'ı getirir.
-      const tryReadResult = async (): Promise<boolean> => {
+      // BLE GATT attribute max boyut 512 byte — uzun tarama JSON'unu Pi
+      // [idx, total, ...chunk] sayfalarına bölüyor. İlk sayfa STATUS "idle"
+      // notify'ında SCAN char'da hazır; sonraki sayfaları 1-byte index write
+      // ile istiyoruz, ardından read.
+      const collect = async () => {
+        if (collecting) return;
+        collecting = true;
         try {
-          console.log("[scanWifi] reading SCAN characteristic...");
-          const ch = await device.readCharacteristicForService(
-            BLE_SERVICE_UUID,
-            BLE_CHAR_SCAN_UUID,
-          );
-          const value: string | null = ch?.value ?? null;
-          console.log("[scanWifi] read raw base64 length:", value?.length ?? 0);
-          if (!value) return false;
-          const text = fromBase64(value);
-          console.log(
-            "[scanWifi] decoded text length:",
-            text.length,
-            "preview:",
-            text.slice(0, 80),
-          );
-          const parsed = JSON.parse(text);
-          if (parsed === null) {
-            console.log("[scanWifi] sentinel null, waiting...");
-            return false;
+          const first = await readScanBytes();
+          if (first.length < 2) {
+            finish(new Error("Tarama verisi alınamadı."));
+            return;
           }
+          const total = first[1];
+          if (total === 0) {
+            // sentinel — STATUS değişimi henüz scan sonucu değil
+            collecting = false;
+            return;
+          }
+          const pages: Uint8Array[] = [first.subarray(2)];
+          for (let i = 1; i < total; i++) {
+            const p = await requestScanPage(i);
+            if (p.length < 2 || p[0] !== i || p[1] !== total) {
+              finish(new Error(`Sayfa ${i} bozuk geldi.`));
+              return;
+            }
+            pages.push(p.subarray(2));
+          }
+          const totalBytes = pages.reduce((s, p) => s + p.length, 0);
+          const buf = new Uint8Array(totalBytes);
+          let off = 0;
+          for (const p of pages) {
+            buf.set(p, off);
+            off += p.length;
+          }
+          const text = bytesToUtf8(buf);
+          const parsed = JSON.parse(text);
           if (!Array.isArray(parsed)) {
             finish(new Error("Tarama verisi geçersiz."));
-            return true;
+            return;
           }
           const networks = parsed
             .filter(
@@ -213,10 +225,26 @@ class RealBleProvisioner implements BleProvisioner {
               secure: typeof n.secure === "boolean" ? n.secure : true,
             }));
           finish(null, networks);
-          return true;
-        } catch {
-          return false;
+        } catch (e: any) {
+          finish(e);
         }
+      };
+
+      const readScanBytes = async (): Promise<Uint8Array> => {
+        const ch = await device.readCharacteristicForService(
+          BLE_SERVICE_UUID,
+          BLE_CHAR_SCAN_UUID,
+        );
+        return base64ToBytes(ch?.value ?? "");
+      };
+
+      const requestScanPage = async (idx: number): Promise<Uint8Array> => {
+        await device.writeCharacteristicWithResponseForService(
+          BLE_SERVICE_UUID,
+          BLE_CHAR_SCAN_UUID,
+          bytesToBase64(new Uint8Array([idx])),
+        );
+        return await readScanBytes();
       };
 
       subscription = device.monitorCharacteristicForService(
@@ -224,37 +252,28 @@ class RealBleProvisioner implements BleProvisioner {
         BLE_CHAR_STATUS_UUID,
         async (error: any, characteristic: any) => {
           if (settled) return;
-          if (error) {
-            console.log("[scanWifi] STATUS monitor error:", error?.message ?? error);
-            return finish(error);
-          }
+          if (error) return finish(error);
           const raw: string | null = characteristic?.value ?? null;
           if (!raw) return;
           const status = fromBase64(raw).trim();
-          console.log("[scanWifi] STATUS notify:", status);
           if (status === "idle") {
-            await tryReadResult();
+            await collect();
           }
         },
       );
 
-      console.log("[scanWifi] writing trigger to SCAN char...");
       device
         .writeCharacteristicWithResponseForService(
           BLE_SERVICE_UUID,
           BLE_CHAR_SCAN_UUID,
           toBase64(""),
         )
-        .then(() => console.log("[scanWifi] trigger write ok"))
-        .catch((err: any) => {
-          console.log("[scanWifi] trigger write FAILED:", err?.message ?? err);
-          finish(err);
-        });
+        .catch((err: any) => finish(err));
 
-      timer = setTimeout(() => {
-        console.log("[scanWifi] TIMEOUT (no idle status received within window)");
-        finish(new Error("Wi-Fi taraması zaman aşımına uğradı."));
-      }, timeoutMs);
+      timer = setTimeout(
+        () => finish(new Error("Wi-Fi taraması zaman aşımına uğradı.")),
+        timeoutMs,
+      );
     });
   }
 
@@ -333,6 +352,22 @@ function fromBase64(input: string): string {
   }
   const Buffer = (globalThis as any).Buffer ?? require("buffer").Buffer;
   return Buffer.from(input, "base64").toString("utf-8");
+}
+
+function base64ToBytes(input: string): Uint8Array {
+  if (!input) return new Uint8Array(0);
+  const Buffer = (globalThis as any).Buffer ?? require("buffer").Buffer;
+  return new Uint8Array(Buffer.from(input, "base64"));
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  const Buffer = (globalThis as any).Buffer ?? require("buffer").Buffer;
+  return Buffer.from(bytes).toString("base64");
+}
+
+function bytesToUtf8(bytes: Uint8Array): string {
+  const Buffer = (globalThis as any).Buffer ?? require("buffer").Buffer;
+  return Buffer.from(bytes).toString("utf-8");
 }
 
 function pickProvisioner(): BleProvisioner {
