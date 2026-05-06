@@ -209,7 +209,7 @@ def start():
             while not quit.is_set():
                 Messages.insert("system", SystemPrompt.get())
 
-                question = Mic.listen(timeout=30)
+                question = Mic.listen()  # timeout=30
                 Messages.insert("user", question)
 
                 if not question:

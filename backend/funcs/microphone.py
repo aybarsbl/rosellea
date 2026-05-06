@@ -144,7 +144,7 @@ class Microphone:
 
         return text
 
-    def listen(self, timeout: int):
+    def listen(self, timeout: int = 0):
         text = ""
 
         started = time.time()
@@ -152,7 +152,7 @@ class Microphone:
         while True:
             self._speach.clear()
             while not self._speach.wait(timeout=0.5):
-                if time.time() - started >= timeout:
+                if timeout > 0 and time.time() - started >= timeout:
                     cut = True
                     break
 
