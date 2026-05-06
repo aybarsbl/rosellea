@@ -5,7 +5,7 @@ opencv-python
 openai
 
 mediapipe
-numpy
+numpy<2
 
 SpeechRecognition
 
