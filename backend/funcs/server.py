@@ -1,4 +1,5 @@
 import threading
+import time
 from typing import Any
 
 import uvicorn
@@ -71,7 +72,7 @@ class Server:
                 self.setup_ready.set()
             return {"ok": True}
 
-    def start(self):
+    def start(self, wait_timeout: float = 5.0):
         if self._thread and self._thread.is_alive():
             return
         config = uvicorn.Config(
@@ -86,6 +87,14 @@ class Server:
             target=self._uvicorn.run, name="rosellea-http", daemon=True
         )
         self._thread.start()
+        # Provisioning sonrası telefon BLE notify alır almaz HTTP'ye fetch
+        # atıyor. uvicorn'un dinlemeye başladığını doğrulamadan dönersek
+        # connection refused alıyor, bu yüzden bloklayıp bekliyoruz.
+        deadline = time.time() + wait_timeout
+        while time.time() < deadline:
+            if self._uvicorn.started:
+                return
+            time.sleep(0.05)
 
     def stop(self):
         if self._uvicorn:

@@ -38,11 +38,23 @@ export default function Configure() {
         if (!cancelled) setError("Oturum bilgisi eksik. Baştan başlayın.");
         return;
       }
-      try {
-        const e = await getEnv(session.ip);
-        if (!cancelled) setEnv(e);
-      } catch {
-        if (!cancelled) setEnv({});
+      // Robot HTTP'yi BLE notify ile aynı anda açıyor; uvicorn'un dinlemeye
+      // başlaması saniyenin altında ama yine de kısa retry ile dayanıklı tutuyoruz.
+      const attempts = 6;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          const e = await getEnv(session.ip);
+          if (!cancelled) setEnv(e);
+          return;
+        } catch {
+          if (cancelled) return;
+          if (i === attempts - 1) {
+            setEnv({});
+            setError("Robota bağlanılamadı. Aynı Wi-Fi'de olduğundan emin ol.");
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 500));
+        }
       }
     };
     load();

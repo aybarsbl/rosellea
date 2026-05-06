@@ -144,12 +144,15 @@ class Provisioning:
             self._publish_status(b"failed")
             return
         self._publish_status(b"connected")
-        self._publish_ip(ip.encode("utf-8"))
+        # IP'yi notify etmeden önce HTTP server / mDNS hazır olsun.
+        # Aksi halde telefon hemen disconnect olup configure ekranında
+        # getEnv() atınca uvicorn henüz bind etmemiş oluyor.
         if self.on_complete:
             try:
                 self.on_complete(ip)
             except Exception:
                 pass
+        self._publish_ip(ip.encode("utf-8"))
 
     def _publish_status(self, value: bytes):
         self._update_char(CHAR_STATUS_UUID, value)
