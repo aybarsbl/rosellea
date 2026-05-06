@@ -1,11 +1,28 @@
-FROM python:3.12-slim
+FROM debian:bookworm-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        gnupg \
+    && curl -fsSL https://archive.raspberrypi.com/debian/raspberrypi.gpg.key \
+        | gpg --dearmor -o /usr/share/keyrings/raspberrypi.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/raspberrypi.gpg] http://archive.raspberrypi.com/debian bookworm main" \
+        > /etc/apt/sources.list.d/raspi.list \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 \
+        python3-pip \
+        python3-venv \
+        python3-picamera2 \
+        python3-libcamera \
+        python3-numpy \
         build-essential \
         ffmpeg \
         portaudio19-dev \
@@ -17,11 +34,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libxrender1 \
         libsdl2-2.0-0 \
         libpq-dev \
-        curl \
         dbus \
         bluez \
         network-manager \
     && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/venv --system-site-packages
+ENV PATH=/opt/venv/bin:$PATH
 
 WORKDIR /app
 

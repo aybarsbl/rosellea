@@ -32,11 +32,16 @@ services:
     network_mode: host
     # BLE/Wi-Fi provisioning host BlueZ ve NetworkManager'a D-Bus üzerinden
     # erişir. Bu dizinler bağlanmazsa Provisioning ve wifi.connect() çalışmaz.
+    # Pi Camera (libcamera) /run/udev üzerinden cihaz keşfi yapar.
     privileged: true
+    group_add:
+      - video
+      - render
     volumes:
       - ./data:/app/data
       - /var/run/dbus:/var/run/dbus
       - /run/dbus:/run/dbus
+      - /run/udev:/run/udev:ro
 
 volumes:
   postgres_data:
