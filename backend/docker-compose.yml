@@ -30,24 +30,19 @@ services:
     environment:
       DATABASE: postgresql://user:password@127.0.0.1:5432/database
     network_mode: host
-    # BLE/Wi-Fi provisioning host BlueZ ve NetworkManager'a D-Bus üzerinden
-    # erişir. Bu dizinler bağlanmazsa Provisioning ve wifi.connect() çalışmaz.
-    # Pi Camera (libcamera) /run/udev üzerinden cihaz keşfi yapar.
     privileged: true
     group_add:
+      - audio
       - video
       - render
+    devices:
+      - /dev/snd:/dev/snd
     volumes:
       - ./data:/app/data
       - /var/run/dbus:/var/run/dbus
       - /run/dbus:/run/dbus
       - /run/udev:/run/udev:ro
-      # Container start anında Wi-Fi yoksa /etc/resolv.conf donuk kalıyor;
-      # host'un canlı resolv.conf'unu bağlayarak BLE provisioning sonrası
-      # DNS'in güncellenmesini sağlıyoruz.
       - /etc/resolv.conf:/etc/resolv.conf:ro
-      # Whisper / HuggingFace modellerini host'ta cache'leyip her container
-      # restart'ında yeniden indirmeyi önlüyoruz.
       - ./data/cache/huggingface:/root/.cache/huggingface
 
 volumes:
