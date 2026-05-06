@@ -42,6 +42,13 @@ services:
       - /var/run/dbus:/var/run/dbus
       - /run/dbus:/run/dbus
       - /run/udev:/run/udev:ro
+      # Container start anında Wi-Fi yoksa /etc/resolv.conf donuk kalıyor;
+      # host'un canlı resolv.conf'unu bağlayarak BLE provisioning sonrası
+      # DNS'in güncellenmesini sağlıyoruz.
+      - /etc/resolv.conf:/etc/resolv.conf:ro
+      # Whisper / HuggingFace modellerini host'ta cache'leyip her container
+      # restart'ında yeniden indirmeyi önlüyoruz.
+      - ./data/cache/huggingface:/root/.cache/huggingface
 
 volumes:
   postgres_data:

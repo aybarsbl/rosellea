@@ -32,6 +32,7 @@ base_path = os.path.dirname(os.path.abspath(__file__))
 _env = env.Environment(os.path.join(base_path, "data/env.json"))
 is_active = threading.Event()
 quit = threading.Event()
+setup_ready = threading.Event()
 
 
 # -------------------
@@ -119,7 +120,9 @@ Tools = tools.Tools(
     hands=Hands,
 )
 AI = llm.LLM(gpt=GPT, gpt_model=llm_model, tools=Tools)
-HttpServer = server.Server(env=_env, name=ROBOT_NAME, port=HTTP_PORT)
+HttpServer = server.Server(
+    env=_env, name=ROBOT_NAME, port=HTTP_PORT, setup_ready=setup_ready
+)
 Discovery = discovery.Discovery(name=ROBOT_NAME, port=HTTP_PORT)
 Provisioning = provisioning.Provisioning(
     name=ROBOT_NAME,
@@ -167,6 +170,20 @@ def start():
         if quit.is_set():
             stop()
             return
+
+    # Wi-Fi var, HTTP/mDNS açık. Kullanıcı telefondan ayarlar ekranını
+    # açıp "kaydet" basana kadar (POST /setup/complete) Cam/Mic/Hands ve
+    # AI döngüsünü başlatma. Önceden kurulum tamamlandıysa direkt geç.
+    if _env.get("setup.completed"):
+        setup_ready.set()
+    else:
+        print("[main] Kurulum bekleniyor: telefondan ayarları kaydet.")
+    while not quit.is_set():
+        if setup_ready.wait(timeout=0.5):
+            break
+    if quit.is_set():
+        stop()
+        return
 
     Cam.start()
     Hands.start()

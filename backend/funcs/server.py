@@ -15,11 +15,19 @@ class EnvPatch(BaseModel):
 
 
 class Server:
-    def __init__(self, env: Environment, name: str, host: str = "0.0.0.0", port: int = 8000):
+    def __init__(
+        self,
+        env: Environment,
+        name: str,
+        host: str = "0.0.0.0",
+        port: int = 8000,
+        setup_ready: threading.Event | None = None,
+    ):
         self.env = env
         self.name = name
         self.host = host
         self.port = port
+        self.setup_ready = setup_ready
 
         self.app = FastAPI(title="Rosellea")
         self.app.add_middleware(
@@ -36,7 +44,11 @@ class Server:
     def _register_routes(self):
         @self.app.get("/health")
         def health():
-            return {"name": self.name, "version": "1.0"}
+            return {
+                "name": self.name,
+                "version": "1.0",
+                "setup_completed": bool(self.env.get("setup.completed")),
+            }
 
         @self.app.get("/env")
         def get_env():
@@ -48,6 +60,16 @@ class Server:
             if not ok:
                 raise HTTPException(status_code=400, detail=f"Invalid key: {patch.key}")
             return {"ok": True, "key": patch.key}
+
+        @self.app.post("/setup/complete")
+        def setup_complete():
+            # Telefonun ayarlar ekranı "kaydet" basınca buraya istek atar.
+            # Flag kalıcı (env.json'a yazılır), event ise bu süreçte AI/Mic/Cam
+            # döngüsünü bekleten main.start()'ı serbest bırakır.
+            self.env.set("setup.completed", True)
+            if self.setup_ready is not None:
+                self.setup_ready.set()
+            return {"ok": True}
 
     def start(self):
         if self._thread and self._thread.is_alive():
