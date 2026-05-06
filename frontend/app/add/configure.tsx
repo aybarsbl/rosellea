@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FieldKey, RobotSettingsForm } from "../../components/RobotSettingsForm";
-import { getEnv } from "../../lib/api";
+import { getEnv, postSetupComplete } from "../../lib/api";
 import { getSession, resetSession } from "../../lib/session";
 import { addRobot } from "../../lib/storage";
 
@@ -54,6 +54,12 @@ export default function Configure() {
   const handleSaved = async () => {
     if (!session.device || !session.ip) {
       setError("Oturum bilgisi eksik. Baştan başlayın.");
+      return;
+    }
+    try {
+      await postSetupComplete(session.ip);
+    } catch (e: any) {
+      setError(e?.message ?? "Robot kurulumu tamamlanamadı.");
       return;
     }
     await addRobot({

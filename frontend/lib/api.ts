@@ -3,6 +3,7 @@ const PORT = 8000;
 export type Health = {
   name: string;
   version: string;
+  setup_completed: boolean;
 };
 
 export type EnvPatch = {
@@ -42,6 +43,11 @@ export async function patchEnvBulk(
   for (const p of patches) {
     await patchEnv(host, p);
   }
+}
+
+export async function postSetupComplete(host: string): Promise<void> {
+  const res = await fetch(url(host, "/setup/complete"), { method: "POST" });
+  if (!res.ok) throw new Error(`POST /setup/complete failed: ${res.status}`);
 }
 
 export function getByPath(env: Record<string, unknown>, key: string): unknown {
