@@ -97,6 +97,7 @@ Mic = microphone.Microphone(
     name=SystemPrompt.get_assistant_name(),
     start=False,
     pause_event=mic_pause,
+    user_name=_env.get("user.name") or "",
 )
 MediapipeTasks = human.Tasks(
     download_path=os.path.join(base_path, mediapipe_tasks),

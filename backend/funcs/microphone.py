@@ -30,7 +30,8 @@ class Microphone:
         name: str,
         start: bool = False,
         pause_event: threading.Event | None = None,
-        stt_model: str = "gpt-4o-mini-transcribe",
+        stt_model: str = "whisper-1",
+        user_name: str = "",
     ):
         self._openai = openai_client
         self._stt_model = stt_model
@@ -49,6 +50,13 @@ class Microphone:
         self._intro_text: str = ""
         self._magic_word: list[str] = ["hey", name, "selam", "merhaba"]
         self._ignore: list[str] = ["Altyazı M.K."]
+        # Whisper'a stil/kelime ipucu — özel isimler ("Mia", "Aybars") sık
+        # geçer, hint olmadan bunlar yanlış transkribe oluyor.
+        actors = ", ".join([n for n in (name, user_name) if n])
+        self._stt_prompt = (
+            f"Konuşma Türkçe. Geçen özel isimler: {actors}." if actors
+            else "Konuşma Türkçe."
+        )
 
         self._speach = threading.Event()
 
@@ -197,15 +205,16 @@ class Microphone:
         return text
 
     def _transcribe(self, audio: io.BytesIO) -> str:
-        """OpenAI Whisper API'ı ile transcribe — Pi 5 CPU'da yerel whisper
-        hem yavaş hem doğruluk düşük; API ~1 sn sürer ve large-v3 kalitesinde
-        sonuç verir. WAV bytes hazır olarak gönderiyoruz."""
+        """OpenAI Whisper API ile transcribe — Pi 5 CPU'da yerel whisper hem
+        yavaş hem doğruluk düşük; whisper-1 (large-v2) Türkçe'de güçlü,
+        ~1-1.5 sn'de döner. Özel isimler için prompt hint kullanıyoruz."""
         audio.seek(0)
         try:
             response = self._openai.audio.transcriptions.create(
                 model=self._stt_model,
                 file=("audio.wav", audio.read(), "audio/wav"),
                 language="tr",
+                prompt=self._stt_prompt,
                 timeout=10,
             )
             return (response.text or "").strip()
