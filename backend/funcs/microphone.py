@@ -30,11 +30,15 @@ class Microphone:
         event: threading.Event,
         name: str,
         start: bool = False,
+        pause_event: threading.Event | None = None,
     ):
         self._model_size = model_size
         self._silence_thold = silence_thold
         self._sound_thold = sound_thold
         self._event = event
+        # Hoparlör konuşurken set edilir; loop o sırada speech detection
+        # yapmaz (echo'yu "kullanıcı konuşması" diye transcribe etmesin).
+        self._pause_event = pause_event
 
         self._model: WhisperModel | None = None
         self._pyaudio = None
@@ -94,7 +98,6 @@ class Microphone:
         return self._thread.running.is_set()
 
     def _loop(self):
-        debug_idle = 0
         # Her okuma 64 ms (FRAMES_PER_BUFFER / NATIVE_RATE). 1 sn sessizlik
         # için kaç chunk gerek: NATIVE_RATE / FRAMES_PER_BUFFER ≈ 15.6
         chunks_per_second = NATIVE_RATE / FRAMES_PER_BUFFER
@@ -109,12 +112,11 @@ class Microphone:
                     return
 
                 data = self._mic.read(FRAMES_PER_BUFFER, exception_on_overflow=False)
-                rms = self._rms_calc(data)
-                debug_idle += 1
-                if debug_idle % int(chunks_per_second) == 0:
-                    print(f"[Mic] idle rms={rms:.0f} thold={self._sound_thold}")
-                if rms >= self._sound_thold:
-                    print(f"[Mic] speech START rms={rms:.0f}")
+                # Hoparlör konuşuyorsa veriyi tüket ama detect etme — buffer
+                # şişmemesi için read() devam, sadece RMS kontrolü atla.
+                if self._pause_event is not None and self._pause_event.is_set():
+                    continue
+                if self._rms_calc(data) >= self._sound_thold:
                     started = True
                     frames.append(data)
                     break
@@ -133,7 +135,6 @@ class Microphone:
                     count = 0
 
                 if count >= silence_limit:
-                    print(f"[Mic] speech END after {len(frames)} chunks")
                     break
 
             if not started or len(frames) < 5 or not self._check():

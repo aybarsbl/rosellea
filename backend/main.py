@@ -33,6 +33,10 @@ _env = env.Environment(os.path.join(base_path, "data/env.json"))
 is_active = threading.Event()
 quit = threading.Event()
 setup_ready = threading.Event()
+# Mia konuşurken (Speaker.speak) set edilir — Mic bu sırada speech detection
+# yapmaz, hoparlörden mikrofona geri sızan ses "kullanıcı" diye transcribe
+# edilmesin.
+mic_pause = threading.Event()
 
 
 # -------------------
@@ -88,10 +92,11 @@ Cam = camera.Camera(start=False)
 Mic = microphone.Microphone(
     model_size="small",
     silence_thold=1.0,
-    sound_thold=100,
+    sound_thold=300,
     event=is_active,
     name=SystemPrompt.get_assistant_name(),
     start=False,
+    pause_event=mic_pause,
 )
 MediapipeTasks = human.Tasks(
     download_path=os.path.join(base_path, mediapipe_tasks),
@@ -110,6 +115,7 @@ Speaker = speaker.Speaker(
     voice_id=elabs_voice,
     speaker_model=elabs_model,
     output_format=elabs_output,
+    pause_event=mic_pause,
 )
 Messages = database.Messages(url=DATABASE, speaker=Speaker, restart=True)
 Tools = tools.Tools(
