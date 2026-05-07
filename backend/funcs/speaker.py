@@ -1,3 +1,4 @@
+import subprocess
 import threading
 import time
 from io import BytesIO
@@ -15,6 +16,7 @@ class Speaker:
         output_format: str,
         duration: int = 1500,
         pause_event: threading.Event | None = None,
+        volume: int = 60,
     ):
         self._duration = duration
         self._speaker = speaker
@@ -25,6 +27,21 @@ class Speaker:
         # mikrofona geri sızıp "kullanıcı konuşması" gibi yorumlanmasını
         # önler.
         self._pause_event = pause_event
+        self._volume = volume
+        self._set_volume()
+
+    def _set_volume(self):
+        """USB cihaz Speaker çıkışını yüzdeyle ayarlar (0-100). amixer
+        dB skalasına linear map eder: -63 dB - 0 dB aralığı."""
+        try:
+            subprocess.run(
+                ["amixer", "-c", "Device", "sset", "Speaker", f"{self._volume}%"],
+                capture_output=True,
+                timeout=2,
+                text=True,
+            )
+        except Exception:
+            pass
 
     def speak(
         self,
