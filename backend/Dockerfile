@@ -28,6 +28,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg \
         portaudio19-dev \
         libasound2-dev \
+        libasound2-plugins \
+        alsa-utils \
         libgl1 \
         libglib2.0-0 \
         libsm6 \
