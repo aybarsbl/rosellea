@@ -90,14 +90,13 @@ SystemPrompt = prompt.System(
 )
 Cam = camera.Camera(start=False)
 Mic = microphone.Microphone(
-    openai_client=GPT,
+    model_size="small",
     silence_thold=0.6,
     sound_thold=300,
     event=is_active,
     name=SystemPrompt.get_assistant_name(),
     start=False,
     pause_event=mic_pause,
-    user_name=_env.get("user.name") or "",
 )
 MediapipeTasks = human.Tasks(
     download_path=os.path.join(base_path, mediapipe_tasks),
@@ -117,7 +116,7 @@ Speaker = speaker.Speaker(
     speaker_model=elabs_model,
     output_format=elabs_output,
     pause_event=mic_pause,
-    volume=45,
+    volume=50,
     duration=800,
 )
 Messages = database.Messages(url=DATABASE, speaker=Speaker, restart=True)

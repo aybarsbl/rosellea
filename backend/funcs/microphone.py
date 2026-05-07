@@ -1,11 +1,12 @@
 import threading
 import time
 import subprocess
+from typing import Literal
 import io
 import wave
 import numpy as np
 import pyaudio
-from openai import OpenAI
+from faster_whisper import WhisperModel
 from funcs import threads
 
 
@@ -23,18 +24,15 @@ FRAMES_PER_BUFFER = 3072  # ~64 ms @ 48 kHz, downmix sonrası 1024 @ 16 kHz
 class Microphone:
     def __init__(
         self,
-        openai_client: OpenAI,
+        model_size: Literal["tiny", "base", "small", "medium", "large-v3"],
         silence_thold: float,
         sound_thold: int,
         event: threading.Event,
         name: str,
         start: bool = False,
         pause_event: threading.Event | None = None,
-        stt_model: str = "whisper-1",
-        user_name: str = "",
     ):
-        self._openai = openai_client
-        self._stt_model = stt_model
+        self._model_size = model_size
         self._silence_thold = silence_thold
         self._sound_thold = sound_thold
         self._event = event
@@ -42,6 +40,7 @@ class Microphone:
         # yapmaz (echo'yu "kullanıcı konuşması" diye transcribe etmesin).
         self._pause_event = pause_event
 
+        self._model: WhisperModel | None = None
         self._pyaudio = None
         self._mic = None
 
@@ -50,13 +49,6 @@ class Microphone:
         self._intro_text: str = ""
         self._magic_word: list[str] = ["hey", name, "selam", "merhaba"]
         self._ignore: list[str] = ["Altyazı M.K."]
-        # Whisper'a stil/kelime ipucu — özel isimler ("Mia", "Aybars") sık
-        # geçer, hint olmadan bunlar yanlış transkribe oluyor.
-        actors = ", ".join([n for n in (name, user_name) if n])
-        self._stt_prompt = (
-            f"Konuşma Türkçe. Geçen özel isimler: {actors}." if actors
-            else "Konuşma Türkçe."
-        )
 
         self._speach = threading.Event()
 
@@ -150,7 +142,24 @@ class Microphone:
 
             audio = self._get_audio(frames)
 
-            text = self._transcribe(audio)
+            segments, _ = self._model.transcribe(
+                audio=audio,
+                language="tr",
+                beam_size=5,
+                best_of=5,
+                temperature=0.0,
+                condition_on_previous_text=False,
+                no_speech_threshold=0.6,
+                log_prob_threshold=-1.0,
+                compression_ratio_threshold=2.4,
+                vad_filter=True,
+                vad_parameters={
+                    "min_silence_duration_ms": 500,
+                    "speech_pad_ms": 200,
+                },
+            )
+
+            text = " ".join(s.text.strip() for s in segments).strip()
 
             with self._thread.lock:
                 if text:
@@ -204,24 +213,6 @@ class Microphone:
 
         return text
 
-    def _transcribe(self, audio: io.BytesIO) -> str:
-        """OpenAI Whisper API ile transcribe — Pi 5 CPU'da yerel whisper hem
-        yavaş hem doğruluk düşük; whisper-1 (large-v2) Türkçe'de güçlü,
-        ~1-1.5 sn'de döner. Özel isimler için prompt hint kullanıyoruz."""
-        audio.seek(0)
-        try:
-            response = self._openai.audio.transcriptions.create(
-                model=self._stt_model,
-                file=("audio.wav", audio.read(), "audio/wav"),
-                language="tr",
-                prompt=self._stt_prompt,
-                timeout=10,
-            )
-            return (response.text or "").strip()
-        except Exception as e:
-            print(f"[Mic] transcribe error: {e!r}")
-            return ""
-
     def _set_mic_gain(self):
         """USB cihaz gain'i +31 dB'de clipping yapıyor; %75'e (~+23 dB) çek."""
         try:
@@ -236,6 +227,12 @@ class Microphone:
 
     def start(self):
         self._set_mic_gain()
+
+        self._model = WhisperModel(
+            self._model_size,
+            device="cpu",
+            compute_type="int8",
+        )
 
         self._pyaudio = pyaudio.PyAudio()
         self._mic = self._pyaudio.open(
