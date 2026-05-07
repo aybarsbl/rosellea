@@ -117,7 +117,7 @@ Speaker = speaker.Speaker(
     speaker_model=elabs_model,
     output_format=elabs_output,
     pause_event=mic_pause,
-    volume=60,
+    volume=45,
     duration=800,
 )
 Messages = database.Messages(url=DATABASE, speaker=Speaker, restart=True)
