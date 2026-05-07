@@ -39,6 +39,7 @@ services:
       - /dev/snd:/dev/snd
     volumes:
       - ./data:/app/data
+      - ./asound.conf:/etc/asound.conf:ro
       - /var/run/dbus:/var/run/dbus
       - /run/dbus:/run/dbus
       - /run/udev:/run/udev:ro
