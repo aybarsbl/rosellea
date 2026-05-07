@@ -90,7 +90,7 @@ SystemPrompt = prompt.System(
 )
 Cam = camera.Camera(start=False)
 Mic = microphone.Microphone(
-    model_size="small",
+    openai_client=GPT,
     silence_thold=0.6,
     sound_thold=300,
     event=is_active,
@@ -116,7 +116,7 @@ Speaker = speaker.Speaker(
     speaker_model=elabs_model,
     output_format=elabs_output,
     pause_event=mic_pause,
-    volume=70,
+    volume=60,
     duration=800,
 )
 Messages = database.Messages(url=DATABASE, speaker=Speaker, restart=True)
