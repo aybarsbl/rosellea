@@ -63,6 +63,7 @@ class Microphone:
         return self._thread.running.is_set()
 
     def _loop(self):
+        debug_idle = 0
         while self._check():
             frames = []
             count = 0
@@ -74,7 +75,13 @@ class Microphone:
                     return
 
                 data = self._mic.read(1024, exception_on_overflow=False)
-                if not self._isSilent(data):
+                rms = self._rms_calc(data)
+                debug_idle += 1
+                # Saniyede ~16 read (1024/16000); her 16'da bir bas → ~1 sn
+                if debug_idle % 16 == 0:
+                    print(f"[Mic] idle rms={rms:.0f} thold={self._sound_thold}")
+                if rms >= self._sound_thold:
+                    print(f"[Mic] speech START rms={rms:.0f}")
                     started = True
                     frames.append(data)
                     break
@@ -85,13 +92,15 @@ class Microphone:
 
                 data = self._mic.read(1024, exception_on_overflow=False)
                 frames.append(data)
+                rms = self._rms_calc(data)
 
-                if self._isSilent(data):
+                if rms < self._sound_thold:
                     count += 1
                 else:
                     count = 0
 
                 if count >= silence_limit:
+                    print(f"[Mic] speech END after {len(frames)} frames")
                     break
 
             if not started or len(frames) < 5 or not self._check():

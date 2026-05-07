@@ -11,7 +11,7 @@ class Speaker:
         voice_id: str,
         speaker_model: str,
         output_format: str,
-        duration: int = 300,
+        duration: int = 1500,
     ):
         self._duration = duration
         self._speaker = speaker
