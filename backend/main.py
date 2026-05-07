@@ -90,8 +90,8 @@ SystemPrompt = prompt.System(
 )
 Cam = camera.Camera(start=False)
 Mic = microphone.Microphone(
-    model_size="small",
-    silence_thold=1.0,
+    model_size="base",
+    silence_thold=0.6,
     sound_thold=300,
     event=is_active,
     name=SystemPrompt.get_assistant_name(),
@@ -116,7 +116,7 @@ Speaker = speaker.Speaker(
     speaker_model=elabs_model,
     output_format=elabs_output,
     pause_event=mic_pause,
-    volume=75,
+    volume=70,
 )
 Messages = database.Messages(url=DATABASE, speaker=Speaker, restart=True)
 Tools = tools.Tools(
@@ -216,7 +216,7 @@ def start():
             while not quit.is_set():
                 Messages.insert("system", SystemPrompt.get())
 
-                question = Mic.listen()  # timeout=30
+                question = Mic.listen(timeout=120)
                 Messages.insert("user", question)
 
                 if not question:
