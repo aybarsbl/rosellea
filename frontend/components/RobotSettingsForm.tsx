@@ -22,7 +22,8 @@ export type FieldKey =
   | "assistantModel"
   | "elabsModel"
   | "elabsOutput"
-  | "elabsVoice";
+  | "elabsVoice"
+  | "whisperSize";
 
 type Props = {
   host: string;
@@ -91,11 +92,13 @@ export function RobotSettingsForm({
   const initialElabsModel = useMemo(() => asString(getByPath(initial, "elabs.model")), [initial]);
   const initialElabsOutput = useMemo(() => asString(getByPath(initial, "elabs.output")), [initial]);
   const initialElabsVoice = useMemo(() => asString(getByPath(initial, "elabs.voice")), [initial]);
+  const initialWhisperSize = useMemo(() => asString(getByPath(initial, "whisper.size")), [initial]);
 
   const assistantModelOptions = useMemo(() => asOptions(getByPath(initial, "openai.models")), [initial]);
   const elabsModelOptions = useMemo(() => asOptions(getByPath(initial, "elabs.models")), [initial]);
   const elabsOutputOptions = useMemo(() => asOptions(getByPath(initial, "elabs.outputs")), [initial]);
   const elabsVoiceOptions = useMemo(() => asOptions(getByPath(initial, "elabs.voices")), [initial]);
+  const whisperSizeOptions = useMemo(() => asOptions(getByPath(initial, "whisper.sizes")), [initial]);
 
   const [name, setName] = useState(initialName);
   const [age, setAge] = useState(initialAge != null ? String(initialAge) : "");
@@ -107,6 +110,7 @@ export function RobotSettingsForm({
   const [elabsModel, setElabsModel] = useState(initialElabsModel);
   const [elabsOutput, setElabsOutput] = useState(initialElabsOutput);
   const [elabsVoice, setElabsVoice] = useState(initialElabsVoice);
+  const [whisperSize, setWhisperSize] = useState(initialWhisperSize);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -171,6 +175,9 @@ export function RobotSettingsForm({
     }
     if (has("elabsVoice") && elabsVoice && elabsVoice !== initialElabsVoice) {
       patches.push({ key: "elabs.voice", value: elabsVoice });
+    }
+    if (has("whisperSize") && whisperSize && whisperSize !== initialWhisperSize) {
+      patches.push({ key: "whisper.size", value: whisperSize });
     }
 
     setSaving(true);
@@ -298,6 +305,16 @@ export function RobotSettingsForm({
           options={elabsVoiceOptions}
           value={elabsVoice}
           onChange={setElabsVoice}
+          note={RESTART_NOTE}
+        />
+      )}
+
+      {has("whisperSize") && (
+        <Dropdown
+          label="Dinleme Modeli"
+          options={whisperSizeOptions}
+          value={whisperSize}
+          onChange={setWhisperSize}
           note={RESTART_NOTE}
         />
       )}

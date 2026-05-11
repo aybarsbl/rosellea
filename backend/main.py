@@ -73,6 +73,12 @@ elabs_voice = _env.get("elabs.voice")
 
 
 # -------------------
+# WHISPER
+# -------------------
+whisper_size = _env.get("whisper.size") or "small"
+
+
+# -------------------
 # MEDIAPIPE
 # -------------------
 mediapipe_tasks = _env.get("mediapipe.folder")
@@ -90,7 +96,7 @@ SystemPrompt = prompt.System(
 )
 Cam = camera.Camera(start=False)
 Mic = microphone.Microphone(
-    model_size="small",
+    model_size=whisper_size,
     silence_thold=0.6,
     sound_thold=300,
     event=is_active,

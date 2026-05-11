@@ -44,7 +44,6 @@ services:
       - /run/dbus:/run/dbus
       - /run/udev:/run/udev:ro
       - /etc/resolv.conf:/etc/resolv.conf:ro
-      - ./data/cache/huggingface:/root/.cache/huggingface
 
 volumes:
   postgres_data:

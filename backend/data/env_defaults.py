@@ -42,6 +42,14 @@ DEFAULT_ENV = {
         },
         "voice": "PdYVUd1CAGSXsTvZZTNn",
     },
+    "whisper": {
+        "sizes": {
+            "large": "small",
+            "medium": "base",
+            "small": "tiny",
+        },
+        "size": "small",
+    },
     "mediapipe": {
         "folder": "data/tasks/",
         "hand": {

@@ -50,6 +50,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
+ENV HF_HOME=/opt/hf-cache
+RUN python -c "from faster_whisper import WhisperModel; \
+    [WhisperModel(s, device='cpu', compute_type='int8') for s in ('tiny', 'base', 'small')]"
+ENV HF_HUB_OFFLINE=1
+
 COPY . .
 
 EXPOSE 8000
