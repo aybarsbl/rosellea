@@ -69,7 +69,8 @@
             "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      "./plugins/withGradleMemory.js"
     ],
     "experiments": {
       "typedRoutes": true,

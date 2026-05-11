@@ -14,6 +14,10 @@
       "channel": "preview",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "GRADLE_OPTS": "-Xmx4096m -XX:MaxMetaspaceSize=1024m",
+        "JAVA_TOOL_OPTIONS": "-Xmx4096m -XX:MaxMetaspaceSize=1024m"
       }
     },
     "production": {
