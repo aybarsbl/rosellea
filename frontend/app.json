@@ -8,6 +8,12 @@
     "scheme": "frontend",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/d9a99e3f-9002-47e9-a2a9-3dcc7751d047"
+    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
