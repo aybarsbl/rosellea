@@ -22,7 +22,11 @@ export default function AddLayout() {
           ),
         }}
       />
-      <Stack.Screen name="setup" options={{ title: "Robot Kurulumu" }} />
+      <Stack.Screen name="setup" options={{ title: "Wi-Fi Bağlantısı" }} />
+      <Stack.Screen
+        name="profile"
+        options={{ title: "Robot Profili", headerBackVisible: false }}
+      />
     </Stack>
   );
 }

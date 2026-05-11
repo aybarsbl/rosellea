@@ -1,0 +1,52 @@
+DEFAULT_ENV = {
+    "setup": {
+        "completed": False,
+    },
+    "user": {
+        "name": "",
+        "age": "",
+        "friendship": 40,
+        "hobbies": [],
+        "health_notes": [],
+        "contacts": [],
+    },
+    "assistant": {
+        "model": "gpt-4o",
+        "folder": "data/assistant/",
+        "system_prompt": "SYSTEM_PROMPT.md",
+        "tools": "tools.json",
+    },
+    "openai": {
+        "models": {
+            "large": "gpt-5.4",
+            "medium": "gpt-5.4-mini",
+            "small": "gpt-4o",
+        },
+    },
+    "elabs": {
+        "models": {
+            "large": "eleven_v3",
+            "medium": "eleven_multilingual_v2",
+            "small": "eleven_flash_v2_5",
+        },
+        "model": "eleven_multilingual_v2",
+        "outputs": {
+            "high": "mp3_44100_192",
+            "normal": "mp3_44100_128",
+            "low": "mp3_22050_32",
+        },
+        "output": "mp3_44100_128",
+        "voices": {
+            "aybars": "rs0m5Uct3s3z8gsNG6S5",
+            "mia": "PdYVUd1CAGSXsTvZZTNn",
+        },
+        "voice": "PdYVUd1CAGSXsTvZZTNn",
+    },
+    "mediapipe": {
+        "folder": "data/tasks/",
+        "hand": {
+            "file": "hand_landmarker.task",
+            "url": "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
+        },
+    },
+}

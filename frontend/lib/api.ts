@@ -57,6 +57,11 @@ export async function postSetupComplete(host: string): Promise<void> {
   if (!res.ok) throw new Error(`POST /setup/complete failed: ${res.status}`);
 }
 
+export async function postReset(host: string): Promise<void> {
+  const res = await fetch(url(host, "/reset"), { method: "POST" });
+  if (!res.ok) throw new Error(`POST /reset failed: ${res.status}`);
+}
+
 export async function getWifiScan(host: string): Promise<WifiScanResponse> {
   const res = await fetch(url(host, "/wifi/scan"));
   if (!res.ok) throw new Error(`GET /wifi/scan failed: ${res.status}`);

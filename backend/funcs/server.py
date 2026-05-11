@@ -1,3 +1,5 @@
+import os
+import sys
 import threading
 import time
 from typing import Any
@@ -7,6 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from data.env_defaults import DEFAULT_ENV
 from funcs import wifi
 from funcs.env import Environment
 
@@ -94,6 +97,24 @@ class Server:
             if not ip:
                 raise HTTPException(status_code=500, detail="IP alınamadı")
             return {"ok": True, "ip": ip}
+
+        @self.app.post("/reset")
+        def reset():
+            # env.json'u default'a al, sonra süreci os.execv ile yeniden başlat.
+            # Restart, HTTP cevabı tel üzerinde uçtuktan sonra olsun diye
+            # daemon thread içinde kısa bir gecikmeyle tetikleniyor.
+            ok = self.env.reset(DEFAULT_ENV)
+            if not ok:
+                raise HTTPException(status_code=500, detail="env.json yazılamadı")
+
+            def _respawn():
+                time.sleep(0.5)
+                sys.stdout.flush()
+                sys.stderr.flush()
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+
+            threading.Thread(target=_respawn, name="rosellea-respawn", daemon=True).start()
+            return {"ok": True}
 
     def start(self, wait_timeout: float = 5.0):
         if self._thread and self._thread.is_alive():

@@ -18,6 +18,7 @@ import {
   getHealth,
   getWifiScan,
   Health,
+  postReset,
   postWifiConnect,
 } from "../../lib/api";
 import {
@@ -30,6 +31,7 @@ import {
 const ALL_FIELDS: FieldKey[] = [
   "name",
   "age",
+  "friendship",
   "hobbies",
   "health_notes",
   "contacts",
@@ -109,10 +111,20 @@ export default function RobotDetail() {
   const confirmRemove = () => {
     if (!robot) return;
     const performRemove = async () => {
+      // Backend fabrika ayarlarına dönsün ve süreç kendini yeniden başlatsın.
+      // Robot offline olabilir → hata fırsatı yakala ama yerel silmeyi engelleme.
+      try {
+        await postReset(robot.host);
+      } catch (e: any) {
+        setError(
+          e?.message ??
+            "Robota bağlanılamadı, sıfırlama yapılamadı. Yine de listeden kaldırılıyor.",
+        );
+      }
       await removeRobot(robot.id);
       router.replace("/");
     };
-    const message = `"${robot.name}" bu uygulamadan kaldırılacak. Devam edilsin mi?`;
+    const message = `"${robot.name}" silinecek. Robot fabrika ayarlarına dönecek ve yeniden başlatılacak. Devam edilsin mi?`;
     if (Platform.OS === "web") {
       if (typeof window !== "undefined" && window.confirm(message)) {
         performRemove();

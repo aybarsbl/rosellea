@@ -1,3 +1,4 @@
+import Slider from "@react-native-community/slider";
 import { useMemo, useState } from "react";
 import {
   Pressable,
@@ -14,6 +15,7 @@ import { Dropdown } from "./Dropdown";
 export type FieldKey =
   | "name"
   | "age"
+  | "friendship"
   | "hobbies"
   | "health_notes"
   | "contacts"
@@ -78,6 +80,10 @@ export function RobotSettingsForm({
 
   const initialName = useMemo(() => asString(getByPath(initial, "user.name")), [initial]);
   const initialAge = useMemo(() => asNumber(getByPath(initial, "user.age")), [initial]);
+  const initialFriendship = useMemo(
+    () => asNumber(getByPath(initial, "user.friendship")) ?? 40,
+    [initial],
+  );
   const initialHobbies = useMemo(() => asStringArray(getByPath(initial, "user.hobbies")), [initial]);
   const initialNotes = useMemo(() => asStringArray(getByPath(initial, "user.health_notes")), [initial]);
   const initialContacts = useMemo(() => asContactArray(getByPath(initial, "user.contacts")), [initial]);
@@ -93,6 +99,7 @@ export function RobotSettingsForm({
 
   const [name, setName] = useState(initialName);
   const [age, setAge] = useState(initialAge != null ? String(initialAge) : "");
+  const [friendship, setFriendship] = useState(initialFriendship);
   const [hobbies, setHobbies] = useState(initialHobbies.join(", "));
   const [healthNotes, setHealthNotes] = useState(initialNotes.join(", "));
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
@@ -140,6 +147,9 @@ export function RobotSettingsForm({
     }
     if (has("age") && ageNum !== initialAge) {
       patches.push({ key: "user.age", value: ageNum });
+    }
+    if (has("friendship") && friendship !== initialFriendship) {
+      patches.push({ key: "user.friendship", value: friendship });
     }
     if (has("hobbies") && !arrayEq(hobbyList, initialHobbies)) {
       patches.push({ key: "user.hobbies", value: hobbyList });
@@ -202,6 +212,23 @@ export function RobotSettingsForm({
             keyboardType="number-pad"
             style={[styles.input, { outline: "none" } as any]}
           />
+        </View>
+      )}
+
+      {has("friendship") && (
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Yakınlık Seviyesi: {friendship}</Text>
+          <Slider
+            minimumValue={0}
+            maximumValue={100}
+            step={1}
+            value={friendship}
+            onValueChange={setFriendship}
+            minimumTrackTintColor="#22c55e"
+            maximumTrackTintColor="#1e293b"
+            thumbTintColor="#22c55e"
+          />
+          <Text style={styles.helper}>0: mesafeli — 100: çok yakın</Text>
         </View>
       )}
 
@@ -313,6 +340,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   error: { color: "#ef4444", fontSize: 13 },
+  helper: { color: "#64748b", fontSize: 12 },
   primary: {
     backgroundColor: "#22c55e",
     paddingVertical: 14,

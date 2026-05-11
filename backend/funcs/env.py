@@ -38,3 +38,6 @@ class Environment:
 
         current[parts[-1]] = value
         return self._write(data)
+
+    def reset(self, defaults: dict) -> bool:
+        return self._write(defaults)
