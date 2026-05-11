@@ -104,3 +104,4 @@ frontend/expo-env.d.ts
 
 
 frontend/.gitignore
+frontend/build-*
