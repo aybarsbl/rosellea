@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Rosellea",
-    "icon": "./assets/images/logo.jpg",
+    "icon": "./assets/images/logo.png",
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -38,11 +38,11 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#020617",
-          "image": "./assets/images/logo.jpg",
+          "image": "./assets/images/logo.png",
           "imageWidth": 200,
           "dark": {
             "backgroundColor": "#020617",
-            "image": "./assets/images/logo.jpg"
+            "image": "./assets/images/logo.png"
           }
         }
       ],
