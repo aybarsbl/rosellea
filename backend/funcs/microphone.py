@@ -31,6 +31,7 @@ class Microphone:
         name: str,
         start: bool = False,
         pause_event: threading.Event | None = None,
+        gain: int = 75,
     ):
         self._model_size = model_size
         self._silence_thold = silence_thold
@@ -39,6 +40,7 @@ class Microphone:
         # Hoparlör konuşurken set edilir; loop o sırada speech detection
         # yapmaz (echo'yu "kullanıcı konuşması" diye transcribe etmesin).
         self._pause_event = pause_event
+        self._gain = gain
 
         self._model: WhisperModel | None = None
         self._pyaudio = None
@@ -214,10 +216,10 @@ class Microphone:
         return text
 
     def _set_mic_gain(self):
-        """USB cihaz gain'i +31 dB'de clipping yapıyor; %75'e (~+23 dB) çek."""
+        """USB cihaz gain'i +31 dB'de clipping yapıyor; varsayılan %75'e (~+23 dB)."""
         try:
             subprocess.run(
-                ["amixer", "-c", "Device", "sset", "Mic", "75%"],
+                ["amixer", "-c", "Device", "sset", "Mic", f"{self._gain}%"],
                 capture_output=True,
                 timeout=2,
                 text=True,

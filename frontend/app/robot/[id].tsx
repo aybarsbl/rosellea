@@ -40,6 +40,8 @@ const ALL_FIELDS: FieldKey[] = [
   "elabsOutput",
   "elabsVoice",
   "whisperSize",
+  "speakerVolume",
+  "micGain",
 ];
 
 export default function RobotDetail() {

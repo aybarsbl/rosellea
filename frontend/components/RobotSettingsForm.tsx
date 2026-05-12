@@ -23,7 +23,9 @@ export type FieldKey =
   | "elabsModel"
   | "elabsOutput"
   | "elabsVoice"
-  | "whisperSize";
+  | "whisperSize"
+  | "speakerVolume"
+  | "micGain";
 
 type Props = {
   host: string;
@@ -93,6 +95,14 @@ export function RobotSettingsForm({
   const initialElabsOutput = useMemo(() => asString(getByPath(initial, "elabs.output")), [initial]);
   const initialElabsVoice = useMemo(() => asString(getByPath(initial, "elabs.voice")), [initial]);
   const initialWhisperSize = useMemo(() => asString(getByPath(initial, "whisper.size")), [initial]);
+  const initialSpeakerVolume = useMemo(
+    () => asNumber(getByPath(initial, "speaker.volume")) ?? 60,
+    [initial],
+  );
+  const initialMicGain = useMemo(
+    () => asNumber(getByPath(initial, "mic.gain")) ?? 75,
+    [initial],
+  );
 
   const assistantModelOptions = useMemo(() => asOptions(getByPath(initial, "openai.models")), [initial]);
   const elabsModelOptions = useMemo(() => asOptions(getByPath(initial, "elabs.models")), [initial]);
@@ -111,6 +121,8 @@ export function RobotSettingsForm({
   const [elabsOutput, setElabsOutput] = useState(initialElabsOutput);
   const [elabsVoice, setElabsVoice] = useState(initialElabsVoice);
   const [whisperSize, setWhisperSize] = useState(initialWhisperSize);
+  const [speakerVolume, setSpeakerVolume] = useState(initialSpeakerVolume);
+  const [micGain, setMicGain] = useState(initialMicGain);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -178,6 +190,12 @@ export function RobotSettingsForm({
     }
     if (has("whisperSize") && whisperSize && whisperSize !== initialWhisperSize) {
       patches.push({ key: "whisper.size", value: whisperSize });
+    }
+    if (has("speakerVolume") && speakerVolume !== initialSpeakerVolume) {
+      patches.push({ key: "speaker.volume", value: speakerVolume });
+    }
+    if (has("micGain") && micGain !== initialMicGain) {
+      patches.push({ key: "mic.gain", value: micGain });
     }
 
     setSaving(true);
@@ -317,6 +335,40 @@ export function RobotSettingsForm({
           onChange={setWhisperSize}
           note={RESTART_NOTE}
         />
+      )}
+
+      {has("speakerVolume") && (
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Ses Seviyesi: {speakerVolume}</Text>
+          <Slider
+            minimumValue={0}
+            maximumValue={100}
+            step={1}
+            value={speakerVolume}
+            onValueChange={setSpeakerVolume}
+            minimumTrackTintColor="#22c55e"
+            maximumTrackTintColor="#1e293b"
+            thumbTintColor="#22c55e"
+          />
+          <Text style={styles.helper}>{RESTART_NOTE}</Text>
+        </View>
+      )}
+
+      {has("micGain") && (
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Mikrofon Seviyesi: {micGain}</Text>
+          <Slider
+            minimumValue={0}
+            maximumValue={100}
+            step={1}
+            value={micGain}
+            onValueChange={setMicGain}
+            minimumTrackTintColor="#22c55e"
+            maximumTrackTintColor="#1e293b"
+            thumbTintColor="#22c55e"
+          />
+          <Text style={styles.helper}>{RESTART_NOTE}</Text>
+        </View>
       )}
 
       {error && <Text style={styles.error}>{error}</Text>}

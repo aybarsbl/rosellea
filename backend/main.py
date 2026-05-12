@@ -79,6 +79,17 @@ whisper_size = _env.get("whisper.size") or "small"
 
 
 # -------------------
+# AUDIO LEVELS
+# -------------------
+speaker_volume = _env.get("speaker.volume")
+if not isinstance(speaker_volume, int):
+    speaker_volume = 60
+mic_gain = _env.get("mic.gain")
+if not isinstance(mic_gain, int):
+    mic_gain = 75
+
+
+# -------------------
 # MEDIAPIPE
 # -------------------
 mediapipe_tasks = _env.get("mediapipe.folder")
@@ -103,6 +114,7 @@ Mic = microphone.Microphone(
     name=SystemPrompt.get_assistant_name(),
     start=False,
     pause_event=mic_pause,
+    gain=mic_gain,
 )
 MediapipeTasks = human.Tasks(
     download_path=os.path.join(base_path, mediapipe_tasks),
@@ -122,7 +134,7 @@ Speaker = speaker.Speaker(
     speaker_model=elabs_model,
     output_format=elabs_output,
     pause_event=mic_pause,
-    volume=50,
+    volume=speaker_volume,
     duration=800,
 )
 Messages = database.Messages(url=DATABASE, speaker=Speaker, restart=True)
