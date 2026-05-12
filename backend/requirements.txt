@@ -9,7 +9,6 @@ numpy<2
 
 SpeechRecognition
 
-faster-whisper
 pyaudio
 
 elevenlabs

@@ -73,9 +73,9 @@ elabs_voice = _env.get("elabs.voice")
 
 
 # -------------------
-# WHISPER
+# WHISPER (OpenAI online transcription)
 # -------------------
-whisper_size = _env.get("whisper.size") or "small"
+whisper_model = _env.get("whisper.model") or "gpt-4o-transcribe"
 
 
 # -------------------
@@ -107,7 +107,8 @@ SystemPrompt = prompt.System(
 )
 Cam = camera.Camera(start=False)
 Mic = microphone.Microphone(
-    model_size=whisper_size,
+    gpt=GPT,
+    model_id=whisper_model,
     silence_thold=0.6,
     sound_thold=300,
     event=is_active,

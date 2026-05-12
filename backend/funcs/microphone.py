@@ -1,12 +1,11 @@
 import threading
 import time
 import subprocess
-from typing import Literal
 import io
 import wave
 import numpy as np
 import pyaudio
-from faster_whisper import WhisperModel
+from openai import OpenAI
 from funcs import threads
 
 
@@ -24,7 +23,8 @@ FRAMES_PER_BUFFER = 3072  # ~64 ms @ 48 kHz, downmix sonrası 1024 @ 16 kHz
 class Microphone:
     def __init__(
         self,
-        model_size: Literal["tiny", "base", "small", "medium", "large-v3"],
+        gpt: OpenAI,
+        model_id: str,
         silence_thold: float,
         sound_thold: int,
         event: threading.Event,
@@ -33,7 +33,9 @@ class Microphone:
         pause_event: threading.Event | None = None,
         gain: int = 75,
     ):
-        self._model_size = model_size
+        self._gpt = gpt
+        self._model_id = model_id
+        self._name = name
         self._silence_thold = silence_thold
         self._sound_thold = sound_thold
         self._event = event
@@ -42,7 +44,6 @@ class Microphone:
         self._pause_event = pause_event
         self._gain = gain
 
-        self._model: WhisperModel | None = None
         self._pyaudio = None
         self._mic = None
 
@@ -50,6 +51,9 @@ class Microphone:
         self._text: str = ""
         self._intro_text: str = ""
         self._magic_word: list[str] = ["hey", name, "selam", "merhaba"]
+        # Online transcribe sessizlikte boş döner; "Altyazı M.K." gibi
+        # faster-whisper'a özgü halüsinasyonlar artık beklenmez ama olası
+        # benzer durumlar için listeyi koru.
         self._ignore: list[str] = ["Altyazı M.K."]
 
         self._speach = threading.Event()
@@ -95,6 +99,41 @@ class Microphone:
 
     def _isSilent(self, data: bytes) -> bool:
         return self._rms_calc(data) < self._sound_thold
+
+    def _transcribe(self, audio: io.BytesIO) -> str:
+        # Halüsinasyonu minimize etmek için: language="tr", temperature=0
+        # ve prompt'ta Türkçe bağlam + asistan adı. Sessizlik zaten RMS
+        # eşiğiyle filtrelendiği için API'ye gerçek konuşma gidiyor.
+        # Latency için stream=True: token'lar geldikçe biriktir.
+        transcribe_prompt = (
+            f"Aşağıdaki ses Türkçe konuşmadır. "
+            f"Asistanın adı '{self._name}'. "
+            f"Kullanıcı asistanla doğal şekilde konuşur."
+        )
+        try:
+            stream = self._gpt.audio.transcriptions.create(
+                model=self._model_id,
+                file=("audio.wav", audio.read(), "audio/wav"),
+                language="tr",
+                prompt=transcribe_prompt,
+                temperature=0,
+                response_format="text",
+                stream=True,
+            )
+            text = ""
+            for event in stream:
+                etype = getattr(event, "type", None)
+                if etype == "transcript.text.delta":
+                    text += getattr(event, "delta", "") or ""
+                elif etype == "transcript.text.done":
+                    # Done event final text'i tekrar veriyor; delta'larla
+                    # birikene güven, ama boşsa done'dan al.
+                    if not text:
+                        text = getattr(event, "text", "") or ""
+            return text.strip()
+        except Exception as e:
+            print(f"[Microphone] transcribe hatası: {e}")
+            return ""
 
     def _check(self) -> bool:
         return self._thread.running.is_set()
@@ -143,25 +182,7 @@ class Microphone:
                 continue
 
             audio = self._get_audio(frames)
-
-            segments, _ = self._model.transcribe(
-                audio=audio,
-                language="tr",
-                beam_size=5,
-                best_of=5,
-                temperature=0.0,
-                condition_on_previous_text=False,
-                no_speech_threshold=0.6,
-                log_prob_threshold=-1.0,
-                compression_ratio_threshold=2.4,
-                vad_filter=True,
-                vad_parameters={
-                    "min_silence_duration_ms": 500,
-                    "speech_pad_ms": 200,
-                },
-            )
-
-            text = " ".join(s.text.strip() for s in segments).strip()
+            text = self._transcribe(audio)
 
             with self._thread.lock:
                 if text:
@@ -229,12 +250,6 @@ class Microphone:
 
     def start(self):
         self._set_mic_gain()
-
-        self._model = WhisperModel(
-            self._model_size,
-            device="cpu",
-            compute_type="int8",
-        )
 
         self._pyaudio = pyaudio.PyAudio()
         self._mic = self._pyaudio.open(
