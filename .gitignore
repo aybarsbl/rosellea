@@ -1,6 +1,7 @@
 # Notes & Tests
 notes/
 backend/tests/
+*claude*
 
 # Ortam değişkenleri / sırlar
 .env
