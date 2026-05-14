@@ -51,8 +51,11 @@ class Smoke:
         try:
             self._i2c = busio.I2C(board.SCL, board.SDA)
             self._ads = ADS.ADS1115(self._i2c, address=self._i2c_address)
-            pins = (ADS.P0, ADS.P1, ADS.P2, ADS.P3)
-            self._chan = AnalogIn(self._ads, pins[self._adc_channel])
+            # AnalogIn ikinci argümanı integer pin numarası kabul ediyor (0-3).
+            # adafruit-circuitpython-ads1x15 v2.x'te ADS.P0..P3 sabitleri
+            # ads1x15 modülüne taşındı; integer geçmek hem eski hem yeni
+            # sürümde çalışır.
+            self._chan = AnalogIn(self._ads, self._adc_channel)
             return True
         except Exception as e:
             print(f"[Smoke] ADS1115 açılamadı: {e}")
