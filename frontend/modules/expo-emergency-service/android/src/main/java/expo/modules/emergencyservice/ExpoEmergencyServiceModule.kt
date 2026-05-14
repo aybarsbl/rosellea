@@ -35,22 +35,26 @@ class ExpoEmergencyServiceModule : Module() {
         OnDestroy { if (instance === this@ExpoEmergencyServiceModule) instance = null }
 
         AsyncFunction("start") { host: String, port: Int, robotName: String ->
-            val ctx = appContext.reactContext ?: return@AsyncFunction
-            val intent = Intent(ctx, EmergencyForegroundService::class.java).apply {
-                putExtra(EmergencyForegroundService.EXTRA_HOST, host)
-                putExtra(EmergencyForegroundService.EXTRA_PORT, port)
-                putExtra(EmergencyForegroundService.EXTRA_ROBOT_NAME, robotName)
+            val ctx = appContext.reactContext
+            if (ctx != null) {
+                val intent = Intent(ctx, EmergencyForegroundService::class.java).apply {
+                    putExtra(EmergencyForegroundService.EXTRA_HOST, host)
+                    putExtra(EmergencyForegroundService.EXTRA_PORT, port)
+                    putExtra(EmergencyForegroundService.EXTRA_ROBOT_NAME, robotName)
+                }
+                ctx.startForegroundService(intent)
             }
-            ctx.startForegroundService(intent)
         }
 
         AsyncFunction("stop") {
-            val ctx = appContext.reactContext ?: return@AsyncFunction
-            val intent = Intent(ctx, EmergencyForegroundService::class.java)
-            ctx.stopService(intent)
+            val ctx = appContext.reactContext
+            if (ctx != null) {
+                val intent = Intent(ctx, EmergencyForegroundService::class.java)
+                ctx.stopService(intent)
+            }
         }
 
-        AsyncFunction("isRunning") { ->
+        AsyncFunction("isRunning") {
             EmergencyForegroundService.INSTANCE != null
         }
     }
