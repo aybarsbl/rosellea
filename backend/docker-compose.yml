@@ -36,8 +36,12 @@ services:
       - audio
       - video
       - render
+      - i2c
+      - gpio
     devices:
       - /dev/snd:/dev/snd
+      - /dev/i2c-1:/dev/i2c-1
+      - /dev/gpiomem:/dev/gpiomem
     volumes:
       - ./data:/app/data
       - ./asound.conf:/etc/asound.conf:ro
@@ -45,6 +49,11 @@ services:
       - /run/dbus:/run/dbus
       - /run/udev:/run/udev:ro
       - /etc/resolv.conf:/etc/resolv.conf:ro
+      # adafruit-blinka Pi modelini /sys/firmware/devicetree veya /proc/cpuinfo
+      # üzerinden tespit eder. /sys mount edilmeden "platform desteklenmiyor"
+      # tarzı hataya düşer.
+      - /sys:/sys
+      - /proc/device-tree:/proc/device-tree:ro
 
 volumes:
   postgres_data:
