@@ -36,8 +36,6 @@ services:
       - audio
       - video
       - render
-      - i2c
-      - gpio
     devices:
       - /dev/snd:/dev/snd
       - /dev/i2c-1:/dev/i2c-1
