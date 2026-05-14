@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import {
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -25,7 +26,10 @@ export type FieldKey =
   | "elabsVoice"
   | "whisperSize"
   | "speakerVolume"
-  | "micGain";
+  | "micGain"
+  | "safetyEnabled"
+  | "smokeThreshold"
+  | "smsTemplate";
 
 type Props = {
   host: string;
@@ -103,6 +107,23 @@ export function RobotSettingsForm({
     () => asNumber(getByPath(initial, "mic.gain")) ?? 75,
     [initial],
   );
+  const initialSafetyEnabled = useMemo(
+    () => {
+      const v = getByPath(initial, "safety.smoke.enabled");
+      return typeof v === "boolean" ? v : true;
+    },
+    [initial],
+  );
+  const initialSmokeThreshold = useMemo(
+    () => asNumber(getByPath(initial, "safety.smoke.threshold")) ?? 18000,
+    [initial],
+  );
+  const initialSmsTemplate = useMemo(
+    () =>
+      asString(getByPath(initial, "safety.smoke.sms_template")) ||
+      "ACIL DURUM: Rosellea ev içinde duman algıladı. Lütfen kontrol edin.",
+    [initial],
+  );
 
   const assistantModelOptions = useMemo(() => asOptions(getByPath(initial, "openai.models")), [initial]);
   const elabsModelOptions = useMemo(() => asOptions(getByPath(initial, "elabs.models")), [initial]);
@@ -123,6 +144,11 @@ export function RobotSettingsForm({
   const [whisperSize, setWhisperSize] = useState(initialWhisperSize);
   const [speakerVolume, setSpeakerVolume] = useState(initialSpeakerVolume);
   const [micGain, setMicGain] = useState(initialMicGain);
+  const [safetyEnabled, setSafetyEnabled] = useState(initialSafetyEnabled);
+  const [smokeThreshold, setSmokeThreshold] = useState(
+    String(initialSmokeThreshold),
+  );
+  const [smsTemplate, setSmsTemplate] = useState(initialSmsTemplate);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -196,6 +222,18 @@ export function RobotSettingsForm({
     }
     if (has("micGain") && micGain !== initialMicGain) {
       patches.push({ key: "mic.gain", value: micGain });
+    }
+    if (has("safetyEnabled") && safetyEnabled !== initialSafetyEnabled) {
+      patches.push({ key: "safety.smoke.enabled", value: safetyEnabled });
+    }
+    if (has("smokeThreshold")) {
+      const parsed = Number(smokeThreshold);
+      if (!Number.isNaN(parsed) && parsed > 0 && parsed !== initialSmokeThreshold) {
+        patches.push({ key: "safety.smoke.threshold", value: parsed });
+      }
+    }
+    if (has("smsTemplate") && smsTemplate.trim() !== initialSmsTemplate) {
+      patches.push({ key: "safety.smoke.sms_template", value: smsTemplate.trim() });
     }
 
     setSaving(true);
@@ -371,6 +409,60 @@ export function RobotSettingsForm({
         </View>
       )}
 
+      {has("safetyEnabled") && (
+        <View style={styles.safetyHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.fieldLabel}>Yangın/Duman İzleyici</Text>
+            <Text style={styles.helper}>
+              MQ-2 duman sensörünü dinler. Eşik aşılırsa robot anons yapar ve
+              telefon kişilere SMS gönderir.
+            </Text>
+          </View>
+          <Switch
+            value={safetyEnabled}
+            onValueChange={setSafetyEnabled}
+            trackColor={{ false: "#1e293b", true: "#15803d" }}
+            thumbColor={safetyEnabled ? "#22c55e" : "#475569"}
+          />
+        </View>
+      )}
+
+      {has("smokeThreshold") && (
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Duman Eşiği (ham ADC değeri)</Text>
+          <TextInput
+            value={smokeThreshold}
+            onChangeText={setSmokeThreshold}
+            placeholder="örn. 18000"
+            placeholderTextColor="#475569"
+            keyboardType="number-pad"
+            style={[styles.input, { outline: "none" } as any]}
+          />
+          <Text style={styles.helper}>
+            ADS1115 16-bit ham okuma. MQ-2 ortamda ~3000-5000, dumanda 18000+'a
+            çıkar. Kalibrasyon için robot detayındaki canlı değeri izle.
+          </Text>
+        </View>
+      )}
+
+      {has("smsTemplate") && (
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Acil Durum SMS Şablonu</Text>
+          <TextInput
+            value={smsTemplate}
+            onChangeText={setSmsTemplate}
+            placeholder="ACIL DURUM: ..."
+            placeholderTextColor="#475569"
+            multiline
+            numberOfLines={3}
+            style={[styles.input, styles.multiline, { outline: "none" } as any]}
+          />
+          <Text style={styles.helper}>
+            Geri sayım iptal edilmezse bağlı tüm kişilere bu mesaj gönderilir.
+          </Text>
+        </View>
+      )}
+
       {error && <Text style={styles.error}>{error}</Text>}
 
       <Pressable
@@ -419,4 +511,16 @@ const styles = StyleSheet.create({
   },
   primaryPressed: { backgroundColor: "#16a34a", transform: [{ scale: 0.98 }] },
   primaryText: { color: "#ffffff", fontSize: 18, fontWeight: "600" },
+  safetyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "#0f172a",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#1e293b",
+  },
+  multiline: { minHeight: 72, textAlignVertical: "top" },
 });

@@ -11,6 +11,7 @@ os.environ["OPENCV_LOG_LEVEL"] = "OFF"
 from funcs import (
     database,
     discovery,
+    emergency,
     env,
     llm,
     prompt,
@@ -18,6 +19,7 @@ from funcs import (
     human,
     provisioning,
     server,
+    smoke,
     speaker,
     threads,
     microphone,
@@ -139,16 +141,37 @@ Speaker = speaker.Speaker(
     duration=800,
 )
 Messages = database.Messages(url=DATABASE, speaker=Speaker, restart=True)
+Emergency = emergency.EmergencyManager(
+    speaker=Speaker,
+    mic=Mic,
+    env=_env,
+    messages=Messages,
+    countdown_s=_env.get("safety.smoke.countdown_s") or 10,
+)
+Smoke = smoke.Smoke(
+    on_detected=Emergency.trigger,
+    threshold=_env.get("safety.smoke.threshold") or 18000,
+    debounce_samples=_env.get("safety.smoke.debounce_samples") or 3,
+    poll_hz=_env.get("safety.smoke.poll_hz") or 5.0,
+    i2c_address=_env.get("safety.smoke.i2c_address") or 0x48,
+    adc_channel=_env.get("safety.smoke.adc_channel") or 0,
+)
 Tools = tools.Tools(
     path=os.path.join(base_path, llm_folder, llm_tools),
     messages=Messages,
     event=quit,
     cam=Cam,
     hands=Hands,
+    emergency=Emergency,
 )
 AI = llm.LLM(gpt=GPT, gpt_model=llm_model, tools=Tools)
 HttpServer = server.Server(
-    env=_env, name=ROBOT_NAME, port=HTTP_PORT, setup_ready=setup_ready
+    env=_env,
+    name=ROBOT_NAME,
+    port=HTTP_PORT,
+    setup_ready=setup_ready,
+    emergency=Emergency,
+    smoke=Smoke,
 )
 Discovery = discovery.Discovery(name=ROBOT_NAME, port=HTTP_PORT)
 Provisioning = provisioning.Provisioning(
@@ -165,6 +188,7 @@ def stop():
     Cam.stop()
     Mic.stop()
     Hands.stop()
+    Smoke.stop()
     HttpServer.stop()
     Discovery.stop()
     Provisioning.stop()
@@ -219,6 +243,9 @@ def start():
     Cam.start()
     Hands.start()
     Mic.start()
+
+    if _env.get("safety.smoke.enabled"):
+        Smoke.start()
 
     Messages.insert("system", SystemPrompt.get())
     Messages.insert("assistant", "[Sistem Başlatıldı]", speak=False)

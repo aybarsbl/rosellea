@@ -38,6 +38,18 @@
   {
     "type": "function",
     "function": {
+      "name": "trigger_emergency",
+      "description": "Kullanıcı yangın, duman, panik, acil yardım, ambulans, 112 gibi konularda yardım çağırılmasını isterse bu fonksiyonu çağır. Robot sesli anonsu yapar ve 10 saniye içinde 'İptal' demezse bağlı kişilere SMS gönderir. Tehlikenin gerçek olduğundan eminsen kullan; sıradan sohbette kullanma.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "log",
       "description": "Her fonksiyon çağrısından ÖNCE MUTLAKA bu fonksiyonu da çağır. Amacı, birazdan çalıştırılacak fonksiyonun yapacağı işi kullanıcıya önceden bildiren kısa bir mesaj iletmektir. Yani tek başına asla çağrılmaz; her zaman başka bir fonksiyonla birlikte, onun hemen öncesinde çağrılır. İçerik konuşma geçmişine asistan mesajı olarak eklenir ve kullanıcıya iletilir.",
       "parameters": {

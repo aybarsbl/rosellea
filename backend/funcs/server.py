@@ -1,16 +1,20 @@
+import asyncio
 import os
+import queue as queue_mod
 import sys
 import threading
 import time
-from typing import Any
+from typing import Any, Optional
 
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from data.env_defaults import DEFAULT_ENV
 from funcs import wifi
+from funcs.emergency import EmergencyManager
 from funcs.env import Environment
 
 
@@ -24,6 +28,14 @@ class WifiCredentials(BaseModel):
     password: str = ""
 
 
+class EmergencyCancel(BaseModel):
+    source: str = "app"
+
+
+class EmergencySent(BaseModel):
+    count: int = 0
+
+
 class Server:
     def __init__(
         self,
@@ -32,12 +44,18 @@ class Server:
         host: str = "0.0.0.0",
         port: int = 8000,
         setup_ready: threading.Event | None = None,
+        emergency: Optional[EmergencyManager] = None,
+        smoke: Any = None,
     ):
         self.env = env
         self.name = name
         self.host = host
         self.port = port
         self.setup_ready = setup_ready
+        self.emergency = emergency
+        # Smoke izleyici opsiyonel; sadece raw current değerini frontend'e
+        # bandırmak için lazım. Tip Any çünkü Smoke hardware-failsafe.
+        self.smoke = smoke
 
         self.app = FastAPI(title="Rosellea")
         self.app.add_middleware(
@@ -97,6 +115,103 @@ class Server:
             if not ip:
                 raise HTTPException(status_code=500, detail="IP alınamadı")
             return {"ok": True, "ip": ip}
+
+        @self.app.get("/emergency")
+        def emergency_state():
+            snap = self.emergency.snapshot() if self.emergency else {
+                "state": "idle",
+                "raw": 0,
+                "threshold": 0,
+                "started_at": 0,
+                "fired_at": 0,
+                "countdown_s": 0,
+                "sent_count": 0,
+            }
+            if self.smoke is not None:
+                cur = self.smoke.current()
+                if cur is not None:
+                    snap["raw"] = cur
+            return snap
+
+        @self.app.post("/emergency/cancel")
+        def emergency_cancel(body: EmergencyCancel | None = None):
+            if self.emergency is None:
+                raise HTTPException(status_code=503, detail="Acil durum yöneticisi yok")
+            source = (body.source if body else "app") or "app"
+            if self.emergency.state != EmergencyManager.STATE_ARMED:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"İptal edilemez, mevcut durum: {self.emergency.state}",
+                )
+            self.emergency.cancel(source)
+            return {"ok": True}
+
+        @self.app.post("/emergency/sent")
+        def emergency_sent(body: EmergencySent):
+            if self.emergency is None:
+                raise HTTPException(status_code=503, detail="Acil durum yöneticisi yok")
+            ok = self.emergency.mark_sent(body.count)
+            if not ok:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Mevcut durum SMS bildirimini kabul etmiyor: {self.emergency.state}",
+                )
+            return {"ok": True}
+
+        @self.app.post("/emergency/test")
+        def emergency_test():
+            if self.emergency is None:
+                raise HTTPException(status_code=503, detail="Acil durum yöneticisi yok")
+            if not self.env.get("safety.smoke.test_enabled"):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Test modu kapalı (safety.smoke.test_enabled=false).",
+                )
+            self.emergency.trigger(99999)
+            return {"ok": True}
+
+        @self.app.get("/events")
+        async def events(request: Request):
+            if self.emergency is None:
+                raise HTTPException(status_code=503, detail="Acil durum yöneticisi yok")
+            q = self.emergency.subscribe()
+            loop = asyncio.get_event_loop()
+
+            async def generator():
+                last_ping = time.time()
+                try:
+                    while True:
+                        if await request.is_disconnected():
+                            break
+                        try:
+                            event = await loop.run_in_executor(
+                                None, lambda: q.get(timeout=1.0)
+                            )
+                        except queue_mod.Empty:
+                            event = None
+
+                        if event is not None:
+                            yield EmergencyManager.format_sse(event)
+
+                        if time.time() - last_ping > 15:
+                            # Proxy / load-balancer connection idle timeout'ları
+                            # için heartbeat. ":" ile başlayan satır SSE comment.
+                            yield b": ping\n\n"
+                            last_ping = time.time()
+                finally:
+                    if self.emergency is not None:
+                        self.emergency.unsubscribe(q)
+
+            headers = {
+                "Cache-Control": "no-cache, no-transform",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            }
+            return StreamingResponse(
+                generator(),
+                media_type="text/event-stream",
+                headers=headers,
+            )
 
         @self.app.post("/reset")
         def reset():

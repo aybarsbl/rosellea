@@ -1,0 +1,9 @@
+{
+  "name": "expo-direct-sms",
+  "version": "0.1.0",
+  "description": "Android SmsManager wrapper for silent SMS sending — sideload only.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "private": true,
+  "keywords": ["react-native", "expo"]
+}

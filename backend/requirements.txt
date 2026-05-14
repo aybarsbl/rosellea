@@ -23,3 +23,6 @@ fastapi
 uvicorn[standard]
 zeroconf
 bless
+
+adafruit-blinka; platform_machine == "aarch64" or platform_machine == "armv7l"
+adafruit-circuitpython-ads1x15; platform_machine == "aarch64" or platform_machine == "armv7l"

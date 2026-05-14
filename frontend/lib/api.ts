@@ -62,6 +62,75 @@ export async function postReset(host: string): Promise<void> {
   if (!res.ok) throw new Error(`POST /reset failed: ${res.status}`);
 }
 
+export type EmergencySnapshot = {
+  state: "idle" | "armed" | "cancelled" | "fired" | "sent";
+  raw: number;
+  threshold: number;
+  started_at: number;
+  fired_at: number;
+  countdown_s: number;
+  sent_count: number;
+};
+
+export async function getEmergency(host: string): Promise<EmergencySnapshot> {
+  const res = await fetch(url(host, "/emergency"));
+  if (!res.ok) throw new Error(`GET /emergency failed: ${res.status}`);
+  return res.json();
+}
+
+export async function postEmergencyCancel(
+  host: string,
+  source: string = "app",
+): Promise<void> {
+  const res = await fetch(url(host, "/emergency/cancel"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source }),
+  });
+  if (!res.ok) {
+    let detail = "";
+    try {
+      detail = (await res.json())?.detail ?? "";
+    } catch {
+      // ignore
+    }
+    throw new Error(detail || `POST /emergency/cancel failed: ${res.status}`);
+  }
+}
+
+export async function postEmergencySent(
+  host: string,
+  count: number,
+): Promise<void> {
+  const res = await fetch(url(host, "/emergency/sent"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ count }),
+  });
+  if (!res.ok) {
+    let detail = "";
+    try {
+      detail = (await res.json())?.detail ?? "";
+    } catch {
+      // ignore
+    }
+    throw new Error(detail || `POST /emergency/sent failed: ${res.status}`);
+  }
+}
+
+export async function postEmergencyTest(host: string): Promise<void> {
+  const res = await fetch(url(host, "/emergency/test"), { method: "POST" });
+  if (!res.ok) {
+    let detail = "";
+    try {
+      detail = (await res.json())?.detail ?? "";
+    } catch {
+      // ignore
+    }
+    throw new Error(detail || `POST /emergency/test failed: ${res.status}`);
+  }
+}
+
 export async function getWifiScan(host: string): Promise<WifiScanResponse> {
   const res = await fetch(url(host, "/wifi/scan"));
   if (!res.ok) throw new Error(`GET /wifi/scan failed: ${res.status}`);

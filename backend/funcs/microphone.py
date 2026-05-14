@@ -3,6 +3,7 @@ import time
 import subprocess
 import io
 import wave
+from typing import Callable, Optional
 import numpy as np
 import pyaudio
 from openai import OpenAI
@@ -57,6 +58,13 @@ class Microphone:
         self._ignore: list[str] = ["Altyazı M.K."]
 
         self._speach = threading.Event()
+
+        # Acil durum modu: set edilince her transkript "iptal" kelimesi için
+        # taranır ve _on_cancel callback'i çağrılır. Normal listen() akışı
+        # değişmez — magic-word algılaması paralel devam eder.
+        self._cancel_words: list[str] = ["iptal"]
+        self._cancel_mode = threading.Event()
+        self._on_cancel: Optional[Callable[[], None]] = None
 
         if start:
             self.start()
@@ -196,7 +204,28 @@ class Microphone:
                             self._intro_text = self._text
                         self._event.set()
 
+            # Acil durum iptal taraması: lock dışında, callback bizden bağımsız
+            # iş yapabilir (state mutex, timer cancel vb.) — kilitli tutmayalım.
+            if self._cancel_mode.is_set() and text:
+                lower = text.lower()
+                if any(w in lower for w in self._cancel_words):
+                    cb = self._on_cancel
+                    if cb is not None:
+                        try:
+                            cb()
+                        except Exception as e:
+                            print(f"[Microphone] cancel callback hatası: {e}")
+
             self._speach.set()
+
+    def set_cancel_listener(self, on_cancel: Optional[Callable[[], None]]):
+        self._on_cancel = on_cancel
+
+    def set_cancel_mode(self, active: bool):
+        if active:
+            self._cancel_mode.set()
+        else:
+            self._cancel_mode.clear()
 
     def wake_up(self):
         text = ""
