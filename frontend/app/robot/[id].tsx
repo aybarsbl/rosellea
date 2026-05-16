@@ -58,7 +58,6 @@ const ALL_FIELDS: FieldKey[] = [
   "elabsModel",
   "elabsOutput",
   "elabsVoice",
-  "whisperSize",
   "speakerVolume",
   "micGain",
 ];
@@ -420,6 +419,7 @@ export default function RobotDetail() {
           initial={env}
           saveLabel="Değişiklikleri Kaydet"
           onSaved={handleSaved}
+          restartAfterSave
         />
 
         <Pressable

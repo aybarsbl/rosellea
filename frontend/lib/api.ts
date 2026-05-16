@@ -62,6 +62,32 @@ export async function postReset(host: string): Promise<void> {
   if (!res.ok) throw new Error(`POST /reset failed: ${res.status}`);
 }
 
+export async function postRestart(host: string): Promise<void> {
+  const res = await fetch(url(host, "/restart"), { method: "POST" });
+  if (!res.ok) throw new Error(`POST /restart failed: ${res.status}`);
+}
+
+export async function waitForHealth(
+  host: string,
+  timeoutMs: number = 60000,
+  intervalMs: number = 1000,
+): Promise<Health> {
+  const deadline = Date.now() + timeoutMs;
+  // Respawn sırasında uvicorn kısa bir süre kapalı kalır; sonra geri gelir.
+  // Önce ilk hatanın geçmesini bekle ki cache'lenmiş "Bağlı" durumu eski
+  // süreci yansıtmasın.
+  await new Promise((r) => setTimeout(r, 1500));
+  while (Date.now() < deadline) {
+    try {
+      const h = await getHealth(host);
+      return h;
+    } catch {
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+  }
+  throw new Error("Robot yeniden aktif olmadı.");
+}
+
 export type EmergencySnapshot = {
   state: "idle" | "armed" | "cancelled" | "fired" | "sent";
   raw: number;

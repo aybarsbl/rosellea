@@ -25,7 +25,6 @@ const ALL_FIELDS: FieldKey[] = [
   "elabsModel",
   "elabsOutput",
   "elabsVoice",
-  "whisperSize",
   "speakerVolume",
   "micGain",
 ];
@@ -71,15 +70,18 @@ export default function Profile() {
     };
   }, [session.device, session.ip]);
 
+  const handleBeforeRestart = async () => {
+    if (!session.ip) {
+      throw new Error("Oturum bilgisi eksik. Baştan başlayın.");
+    }
+    // Restart öncesinde setup flag'ini env.json'a yaz; respawn sonrası main.py
+    // bunu okuyup kurulum bekleme bloğunu geçer.
+    await postSetupComplete(session.ip);
+  };
+
   const handleSaved = async () => {
     if (!session.device || !session.ip) {
       setError("Oturum bilgisi eksik. Baştan başlayın.");
-      return;
-    }
-    try {
-      await postSetupComplete(session.ip);
-    } catch (e: any) {
-      setError(e?.message ?? "Robot kurulumu tamamlanamadı.");
       return;
     }
     await addRobot({
@@ -126,6 +128,8 @@ export default function Profile() {
             initial={env}
             saveLabel="Kaydet ve Bitir"
             onSaved={handleSaved}
+            onBeforeRestart={handleBeforeRestart}
+            restartAfterSave
           />
         )}
       </ScrollView>

@@ -263,14 +263,25 @@ class Server:
             if not ok:
                 raise HTTPException(status_code=500, detail="env.json yazılamadı")
 
-            def _respawn():
-                time.sleep(0.5)
-                sys.stdout.flush()
-                sys.stderr.flush()
-                os.execv(sys.executable, [sys.executable] + sys.argv)
-
-            threading.Thread(target=_respawn, name="rosellea-respawn", daemon=True).start()
+            self._schedule_respawn()
             return {"ok": True}
+
+        @self.app.post("/restart")
+        def restart():
+            # env.json'a dokunmadan süreci yeniden başlatır. Telefondan ayar
+            # kaydedildikten sonra modellerin (assistant, elabs, whisper, vs.)
+            # taze değerlerle yüklenebilmesi için kullanılır.
+            self._schedule_respawn()
+            return {"ok": True}
+
+    def _schedule_respawn(self):
+        def _respawn():
+            time.sleep(0.5)
+            sys.stdout.flush()
+            sys.stderr.flush()
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        threading.Thread(target=_respawn, name="rosellea-respawn", daemon=True).start()
 
     def start(self, wait_timeout: float = 5.0):
         if self._thread and self._thread.is_alive():

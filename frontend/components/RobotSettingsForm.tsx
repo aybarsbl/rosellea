@@ -1,6 +1,7 @@
 import Slider from "@react-native-community/slider";
 import { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   StyleSheet,
   Switch,
@@ -8,7 +9,13 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { getByPath, patchEnvBulk, EnvPatch } from "../lib/api";
+import {
+  getByPath,
+  patchEnvBulk,
+  postRestart,
+  waitForHealth,
+  EnvPatch,
+} from "../lib/api";
 import { Contact, EnvOptions } from "../lib/envTypes";
 import { ContactsEditor } from "./ContactsEditor";
 import { Dropdown } from "./Dropdown";
@@ -24,7 +31,6 @@ export type FieldKey =
   | "elabsModel"
   | "elabsOutput"
   | "elabsVoice"
-  | "whisperSize"
   | "speakerVolume"
   | "micGain"
   | "safetyEnabled"
@@ -45,9 +51,9 @@ type Props = {
   initial: Record<string, unknown>;
   saveLabel: string;
   onSaved?: () => void | Promise<void>;
+  restartAfterSave?: boolean;
+  onBeforeRestart?: () => void | Promise<void>;
 };
-
-const RESTART_NOTE = "Bu ayar robot yeniden başlatıldığında etkili olur.";
 
 function asString(v: unknown): string {
   return typeof v === "string" ? v : "";
@@ -90,6 +96,8 @@ export function RobotSettingsForm({
   initial,
   saveLabel,
   onSaved,
+  restartAfterSave = false,
+  onBeforeRestart,
 }: Props) {
   const has = (k: FieldKey) => fields.includes(k);
 
@@ -106,7 +114,6 @@ export function RobotSettingsForm({
   const initialElabsModel = useMemo(() => asString(getByPath(initial, "elabs.model")), [initial]);
   const initialElabsOutput = useMemo(() => asString(getByPath(initial, "elabs.output")), [initial]);
   const initialElabsVoice = useMemo(() => asString(getByPath(initial, "elabs.voice")), [initial]);
-  const initialWhisperSize = useMemo(() => asString(getByPath(initial, "whisper.size")), [initial]);
   const initialSpeakerVolume = useMemo(
     () => asNumber(getByPath(initial, "speaker.volume")) ?? 60,
     [initial],
@@ -174,7 +181,6 @@ export function RobotSettingsForm({
   const elabsModelOptions = useMemo(() => asOptions(getByPath(initial, "elabs.models")), [initial]);
   const elabsOutputOptions = useMemo(() => asOptions(getByPath(initial, "elabs.outputs")), [initial]);
   const elabsVoiceOptions = useMemo(() => asOptions(getByPath(initial, "elabs.voices")), [initial]);
-  const whisperSizeOptions = useMemo(() => asOptions(getByPath(initial, "whisper.sizes")), [initial]);
 
   const [name, setName] = useState(initialName);
   const [age, setAge] = useState(initialAge != null ? String(initialAge) : "");
@@ -186,7 +192,6 @@ export function RobotSettingsForm({
   const [elabsModel, setElabsModel] = useState(initialElabsModel);
   const [elabsOutput, setElabsOutput] = useState(initialElabsOutput);
   const [elabsVoice, setElabsVoice] = useState(initialElabsVoice);
-  const [whisperSize, setWhisperSize] = useState(initialWhisperSize);
   const [speakerVolume, setSpeakerVolume] = useState(initialSpeakerVolume);
   const [micGain, setMicGain] = useState(initialMicGain);
   const [safetyEnabled, setSafetyEnabled] = useState(initialSafetyEnabled);
@@ -208,6 +213,7 @@ export function RobotSettingsForm({
   const [hrSmsTemplate, setHrSmsTemplate] = useState(initialHrSmsTemplate);
 
   const [saving, setSaving] = useState(false);
+  const [restarting, setRestarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const save = async () => {
@@ -270,9 +276,6 @@ export function RobotSettingsForm({
     }
     if (has("elabsVoice") && elabsVoice && elabsVoice !== initialElabsVoice) {
       patches.push({ key: "elabs.voice", value: elabsVoice });
-    }
-    if (has("whisperSize") && whisperSize && whisperSize !== initialWhisperSize) {
-      patches.push({ key: "whisper.size", value: whisperSize });
     }
     if (has("speakerVolume") && speakerVolume !== initialSpeakerVolume) {
       patches.push({ key: "speaker.volume", value: speakerVolume });
@@ -369,13 +372,28 @@ export function RobotSettingsForm({
       if (patches.length > 0) {
         await patchEnvBulk(host, patches);
       }
+      if (restartAfterSave) {
+        await onBeforeRestart?.();
+        setSaving(false);
+        setRestarting(true);
+        await postRestart(host);
+        await waitForHealth(host);
+      }
       await onSaved?.();
     } catch (e: any) {
       setError(e?.message ?? "Kaydedilemedi.");
     } finally {
       setSaving(false);
+      setRestarting(false);
     }
   };
+
+  const busy = saving || restarting;
+  const buttonLabel = restarting
+    ? "Yeniden başlatılıyor..."
+    : saving
+      ? "Kaydediliyor..."
+      : saveLabel;
 
   return (
     <View style={styles.form}>
@@ -459,7 +477,6 @@ export function RobotSettingsForm({
           options={assistantModelOptions}
           value={assistantModel}
           onChange={setAssistantModel}
-          note={RESTART_NOTE}
         />
       )}
 
@@ -469,7 +486,6 @@ export function RobotSettingsForm({
           options={elabsModelOptions}
           value={elabsModel}
           onChange={setElabsModel}
-          note={RESTART_NOTE}
         />
       )}
 
@@ -479,7 +495,6 @@ export function RobotSettingsForm({
           options={elabsOutputOptions}
           value={elabsOutput}
           onChange={setElabsOutput}
-          note={RESTART_NOTE}
         />
       )}
 
@@ -489,17 +504,6 @@ export function RobotSettingsForm({
           options={elabsVoiceOptions}
           value={elabsVoice}
           onChange={setElabsVoice}
-          note={RESTART_NOTE}
-        />
-      )}
-
-      {has("whisperSize") && (
-        <Dropdown
-          label="Dinleme Modeli"
-          options={whisperSizeOptions}
-          value={whisperSize}
-          onChange={setWhisperSize}
-          note={RESTART_NOTE}
         />
       )}
 
@@ -516,7 +520,6 @@ export function RobotSettingsForm({
             maximumTrackTintColor="#1e293b"
             thumbTintColor="#22c55e"
           />
-          <Text style={styles.helper}>{RESTART_NOTE}</Text>
         </View>
       )}
 
@@ -533,7 +536,6 @@ export function RobotSettingsForm({
             maximumTrackTintColor="#1e293b"
             thumbTintColor="#22c55e"
           />
-          <Text style={styles.helper}>{RESTART_NOTE}</Text>
         </View>
       )}
 
@@ -724,14 +726,21 @@ export function RobotSettingsForm({
       <Pressable
         style={({ pressed }) => [
           styles.primary,
-          (pressed || saving) && styles.primaryPressed,
+          (pressed || busy) && styles.primaryPressed,
         ]}
         onPress={save}
-        disabled={saving}
+        disabled={busy}
       >
-        <Text style={styles.primaryText}>
-          {saving ? "Kaydediliyor..." : saveLabel}
-        </Text>
+        <View style={styles.primaryInner}>
+          {busy && (
+            <ActivityIndicator
+              size="small"
+              color="#ffffff"
+              style={styles.primarySpinner}
+            />
+          )}
+          <Text style={styles.primaryText}>{buttonLabel}</Text>
+        </View>
       </Pressable>
     </View>
   );
@@ -766,6 +775,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   primaryPressed: { backgroundColor: "#16a34a", transform: [{ scale: 0.98 }] },
+  primaryInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  primarySpinner: { marginRight: 4 },
   primaryText: { color: "#ffffff", fontSize: 18, fontWeight: "600" },
   safetyHeader: {
     flexDirection: "row",
