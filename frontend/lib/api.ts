@@ -131,6 +131,29 @@ export async function postEmergencyTest(host: string): Promise<void> {
   }
 }
 
+export type HeartRateSample = {
+  ts: number;
+  bpm: number;
+  on_wrist: boolean;
+  accuracy: string;
+  age_s: number;
+};
+
+export type HeartRateSnapshot = {
+  device_id: string;
+  samples: number;
+  last: HeartRateSample | null;
+  enabled: boolean;
+  low_bpm: number;
+  high_bpm: number;
+};
+
+export async function getHeartRate(host: string): Promise<HeartRateSnapshot> {
+  const res = await fetch(url(host, "/vitals/heart_rate"));
+  if (!res.ok) throw new Error(`GET /vitals/heart_rate failed: ${res.status}`);
+  return res.json();
+}
+
 export async function getWifiScan(host: string): Promise<WifiScanResponse> {
   const res = await fetch(url(host, "/wifi/scan"));
   if (!res.ok) throw new Error(`GET /wifi/scan failed: ${res.status}`);

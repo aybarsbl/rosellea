@@ -25,6 +25,10 @@ class VitalsMonitor:
         self._lock = threading.Lock()
         # device_id -> deque[(ts, hr, on_wrist, accuracy)]
         self._buffers: dict[str, Deque[tuple[float, int, bool, str]]] = {}
+        # Snapshot endpoint için. Saat POST'larda kendi Build.MODEL'ini
+        # gönderdiğinden frontend hangi device_id ile sorgu atacağını bilmiyor;
+        # bu yüzden "en son aktif cihaz"ı kayıt altında tutuyoruz.
+        self._last_device_id: Optional[str] = None
 
     def _buffer_seconds(self) -> int:
         v = self._env.get("safety.heart_rate.sample_buffer_seconds")
@@ -39,13 +43,28 @@ class VitalsMonitor:
             self._buffers[device_id] = buf
         return buf
 
-    def snapshot(self, device_id: str = "watch") -> dict:
+    def snapshot(self, device_id: Optional[str] = None) -> dict:
         with self._lock:
+            if not device_id:
+                device_id = self._last_device_id or "watch"
             buf = list(self._buffers.get(device_id, ()))
+        last = None
+        if buf:
+            ts, hr, on_wrist, accuracy = buf[-1]
+            last = {
+                "ts": ts,
+                "bpm": hr,
+                "on_wrist": on_wrist,
+                "accuracy": accuracy,
+                "age_s": max(0.0, self._clock() - ts),
+            }
         return {
             "device_id": device_id,
             "samples": len(buf),
-            "last": buf[-1] if buf else None,
+            "last": last,
+            "enabled": bool(self._env.get("safety.heart_rate.enabled")),
+            "low_bpm": int(self._env.get("safety.heart_rate.low_threshold_bpm") or 40),
+            "high_bpm": int(self._env.get("safety.heart_rate.high_threshold_bpm") or 130),
         }
 
     def ingest(
@@ -62,6 +81,7 @@ class VitalsMonitor:
         with self._lock:
             buf = self._get_buffer(device_id)
             buf.append((ts, hr, bool(on_wrist), str(accuracy or "UNKNOWN")))
+            self._last_device_id = device_id
             # Pencere dışındakileri at — maxlen zaten örnek sayısını sınırlıyor
             # ama uzun süreli düşük frekansta zamansal pencere de daralsın.
             window = max(

@@ -19,8 +19,10 @@ import {
   getEmergency,
   getEnv,
   getHealth,
+  getHeartRate,
   getWifiScan,
   Health,
+  HeartRateSnapshot,
   postReset,
   postWifiConnect,
 } from "../../lib/api";
@@ -44,6 +46,14 @@ const ALL_FIELDS: FieldKey[] = [
   "safetyEnabled",
   "smokeThreshold",
   "smsTemplate",
+  "hrEnabled",
+  "hrLowBpm",
+  "hrHighBpm",
+  "hrLowSeconds",
+  "hrHighSeconds",
+  "hrSuddenChangeBpm",
+  "hrSuddenChangeWindowS",
+  "hrSmsTemplate",
   "assistantModel",
   "elabsModel",
   "elabsOutput",
@@ -83,6 +93,7 @@ export default function RobotDetail() {
   const [showWifi, setShowWifi] = useState(false);
   const [currentSsid, setCurrentSsid] = useState<string | null>(null);
   const [smokeSnapshot, setSmokeSnapshot] = useState<EmergencySnapshot | null>(null);
+  const [hrSnapshot, setHrSnapshot] = useState<HeartRateSnapshot | null>(null);
   const monitoringHostRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -182,6 +193,29 @@ export default function RobotDetail() {
     };
   }, [robot]);
 
+  // Canlı kalp ritmi — saatten gelen son örneği 2 saniyede bir çek. Saatten
+  // POST cadence 5sn olsa da kart yenilemesi daha sık olsun ki "age_s" sayacı
+  // yumuşak ilerlesin.
+  useEffect(() => {
+    if (!robot) return;
+    let cancelled = false;
+    let timer: any;
+    const tick = async () => {
+      try {
+        const snap = await getHeartRate(robot.host);
+        if (!cancelled) setHrSnapshot(snap);
+      } catch {
+        if (!cancelled) setHrSnapshot(null);
+      }
+      if (!cancelled) timer = setTimeout(tick, 2000);
+    };
+    tick();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [robot]);
+
   const handleSaved = async () => {
     setReloadKey((k) => k + 1);
   };
@@ -268,6 +302,54 @@ export default function RobotDetail() {
             {health ? "Bağlı" : "Bağlanılamadı"}
           </Text>
         </View>
+
+        {hrSnapshot && (
+          (() => {
+            const last = hrSnapshot.last;
+            const fresh = last !== null && last.age_s <= 15;
+            const onWrist = fresh && last!.on_wrist;
+            const bpm = last && fresh ? last.bpm : 0;
+            const inLow = onWrist && bpm > 0 && bpm <= hrSnapshot.low_bpm;
+            const inHigh = onWrist && bpm >= hrSnapshot.high_bpm;
+            const stateText = !hrSnapshot.enabled
+              ? "İzleyici kapalı"
+              : last === null
+                ? "Veri yok"
+                : !fresh
+                  ? `Saat sustu (${Math.round(last.age_s)} sn)`
+                  : !last.on_wrist
+                    ? "Bilekte değil"
+                    : inLow
+                      ? "Düşük"
+                      : inHigh
+                        ? "Yüksek"
+                        : "Normal";
+            return (
+              <View style={styles.card}>
+                <Text style={styles.cardMeta}>Kalp ritmi (canlı)</Text>
+                <Text
+                  style={[
+                    styles.smokeValue,
+                    !onWrist && styles.hrValueIdle,
+                    inLow && styles.smokeValueWarn,
+                    inHigh && styles.smokeValueAlert,
+                  ]}
+                >
+                  {onWrist && bpm > 0 ? `${bpm} BPM` : "—"}
+                </Text>
+                <Text style={styles.cardMeta}>
+                  Aralık: {hrSnapshot.low_bpm} – {hrSnapshot.high_bpm} BPM
+                </Text>
+                <Text style={styles.cardMeta}>Durum: {stateText}</Text>
+                {last && (
+                  <Text style={styles.cardMeta}>
+                    Doğruluk: {last.accuracy}
+                  </Text>
+                )}
+              </View>
+            );
+          })()
+        )}
 
         {smokeSnapshot && smokeSnapshot.threshold > 0 && (
           <View style={styles.card}>
@@ -381,6 +463,7 @@ const styles = StyleSheet.create({
   smokeValue: { color: "#86efac", fontSize: 22, fontWeight: "700", marginTop: 6 },
   smokeValueWarn: { color: "#fbbf24" },
   smokeValueAlert: { color: "#fca5a5" },
+  hrValueIdle: { color: "#64748b" },
   smokeBarOuter: {
     marginTop: 8,
     height: 8,

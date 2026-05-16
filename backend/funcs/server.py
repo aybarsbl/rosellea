@@ -195,6 +195,22 @@ class Server:
             )
             return {"ok": True}
 
+        @self.app.get("/vitals/heart_rate")
+        def vitals_heart_rate_snapshot(device_id: Optional[str] = None):
+            # Vitals tamamen devre dışıyken (env.safety.heart_rate.enabled=False
+            # ve init'te None verildi) bile frontend kart gösterebilsin diye boş
+            # bir kabuk dön. 503 atmak UI'da hataya neden olur.
+            if self.vitals is None:
+                return {
+                    "device_id": device_id or "watch",
+                    "samples": 0,
+                    "last": None,
+                    "enabled": False,
+                    "low_bpm": int(self.env.get("safety.heart_rate.low_threshold_bpm") or 40),
+                    "high_bpm": int(self.env.get("safety.heart_rate.high_threshold_bpm") or 130),
+                }
+            return self.vitals.snapshot(device_id)
+
         @self.app.get("/events")
         async def events(request: Request):
             if self.emergency is None:

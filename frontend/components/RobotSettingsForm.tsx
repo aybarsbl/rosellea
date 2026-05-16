@@ -29,7 +29,15 @@ export type FieldKey =
   | "micGain"
   | "safetyEnabled"
   | "smokeThreshold"
-  | "smsTemplate";
+  | "smsTemplate"
+  | "hrEnabled"
+  | "hrLowBpm"
+  | "hrHighBpm"
+  | "hrLowSeconds"
+  | "hrHighSeconds"
+  | "hrSuddenChangeBpm"
+  | "hrSuddenChangeWindowS"
+  | "hrSmsTemplate";
 
 type Props = {
   host: string;
@@ -124,6 +132,43 @@ export function RobotSettingsForm({
       "ACIL DURUM: Rosellea ev içinde duman algıladı. Lütfen kontrol edin.",
     [initial],
   );
+  const initialHrEnabled = useMemo(
+    () => {
+      const v = getByPath(initial, "safety.heart_rate.enabled");
+      return typeof v === "boolean" ? v : true;
+    },
+    [initial],
+  );
+  const initialHrLowBpm = useMemo(
+    () => asNumber(getByPath(initial, "safety.heart_rate.low_threshold_bpm")) ?? 40,
+    [initial],
+  );
+  const initialHrHighBpm = useMemo(
+    () => asNumber(getByPath(initial, "safety.heart_rate.high_threshold_bpm")) ?? 130,
+    [initial],
+  );
+  const initialHrLowSeconds = useMemo(
+    () => asNumber(getByPath(initial, "safety.heart_rate.low_threshold_seconds")) ?? 15,
+    [initial],
+  );
+  const initialHrHighSeconds = useMemo(
+    () => asNumber(getByPath(initial, "safety.heart_rate.high_threshold_seconds")) ?? 30,
+    [initial],
+  );
+  const initialHrSuddenChangeBpm = useMemo(
+    () => asNumber(getByPath(initial, "safety.heart_rate.sudden_change_bpm")) ?? 30,
+    [initial],
+  );
+  const initialHrSuddenChangeWindowS = useMemo(
+    () => asNumber(getByPath(initial, "safety.heart_rate.sudden_change_window_s")) ?? 30,
+    [initial],
+  );
+  const initialHrSmsTemplate = useMemo(
+    () =>
+      asString(getByPath(initial, "safety.heart_rate.sms_template")) ||
+      "ACIL DURUM: Rosellea kalp ritmi anomalisi tespit etti. Lütfen kontrol edin.",
+    [initial],
+  );
 
   const assistantModelOptions = useMemo(() => asOptions(getByPath(initial, "openai.models")), [initial]);
   const elabsModelOptions = useMemo(() => asOptions(getByPath(initial, "elabs.models")), [initial]);
@@ -149,6 +194,18 @@ export function RobotSettingsForm({
     String(initialSmokeThreshold),
   );
   const [smsTemplate, setSmsTemplate] = useState(initialSmsTemplate);
+  const [hrEnabled, setHrEnabled] = useState(initialHrEnabled);
+  const [hrLowBpm, setHrLowBpm] = useState(String(initialHrLowBpm));
+  const [hrHighBpm, setHrHighBpm] = useState(String(initialHrHighBpm));
+  const [hrLowSeconds, setHrLowSeconds] = useState(String(initialHrLowSeconds));
+  const [hrHighSeconds, setHrHighSeconds] = useState(String(initialHrHighSeconds));
+  const [hrSuddenChangeBpm, setHrSuddenChangeBpm] = useState(
+    String(initialHrSuddenChangeBpm),
+  );
+  const [hrSuddenChangeWindowS, setHrSuddenChangeWindowS] = useState(
+    String(initialHrSuddenChangeWindowS),
+  );
+  const [hrSmsTemplate, setHrSmsTemplate] = useState(initialHrSmsTemplate);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -234,6 +291,77 @@ export function RobotSettingsForm({
     }
     if (has("smsTemplate") && smsTemplate.trim() !== initialSmsTemplate) {
       patches.push({ key: "safety.smoke.sms_template", value: smsTemplate.trim() });
+    }
+
+    // Saatten gelen kalp ritmi anomali kuralı eşikleri. Min < Max kontrolünü
+    // hem uygulanabilirlik hem de kullanıcı hatasını yakalamak için yapıyoruz.
+    const parseHr = (raw: string, name: string, min = 1): number | null => {
+      const n = Number(raw);
+      if (Number.isNaN(n) || n < min) {
+        setError(`${name} geçerli bir sayı olmalı.`);
+        return null;
+      }
+      return n;
+    };
+
+    if (has("hrEnabled") && hrEnabled !== initialHrEnabled) {
+      patches.push({ key: "safety.heart_rate.enabled", value: hrEnabled });
+    }
+
+    let hrLow: number | null = null;
+    let hrHigh: number | null = null;
+    if (has("hrLowBpm")) {
+      hrLow = parseHr(hrLowBpm, "Min BPM", 20);
+      if (hrLow === null) return;
+    }
+    if (has("hrHighBpm")) {
+      hrHigh = parseHr(hrHighBpm, "Max BPM", 40);
+      if (hrHigh === null) return;
+    }
+    if (hrLow !== null && hrHigh !== null && hrLow >= hrHigh) {
+      setError("Min BPM, Max BPM'den küçük olmalı.");
+      return;
+    }
+    if (hrLow !== null && hrLow !== initialHrLowBpm) {
+      patches.push({ key: "safety.heart_rate.low_threshold_bpm", value: hrLow });
+    }
+    if (hrHigh !== null && hrHigh !== initialHrHighBpm) {
+      patches.push({ key: "safety.heart_rate.high_threshold_bpm", value: hrHigh });
+    }
+
+    if (has("hrLowSeconds")) {
+      const v = parseHr(hrLowSeconds, "Min BPM süresi", 1);
+      if (v === null) return;
+      if (v !== initialHrLowSeconds) {
+        patches.push({ key: "safety.heart_rate.low_threshold_seconds", value: v });
+      }
+    }
+    if (has("hrHighSeconds")) {
+      const v = parseHr(hrHighSeconds, "Max BPM süresi", 1);
+      if (v === null) return;
+      if (v !== initialHrHighSeconds) {
+        patches.push({ key: "safety.heart_rate.high_threshold_seconds", value: v });
+      }
+    }
+    if (has("hrSuddenChangeBpm")) {
+      const v = parseHr(hrSuddenChangeBpm, "Ani değişim BPM", 5);
+      if (v === null) return;
+      if (v !== initialHrSuddenChangeBpm) {
+        patches.push({ key: "safety.heart_rate.sudden_change_bpm", value: v });
+      }
+    }
+    if (has("hrSuddenChangeWindowS")) {
+      const v = parseHr(hrSuddenChangeWindowS, "Ani değişim penceresi", 5);
+      if (v === null) return;
+      if (v !== initialHrSuddenChangeWindowS) {
+        patches.push({ key: "safety.heart_rate.sudden_change_window_s", value: v });
+      }
+    }
+    if (has("hrSmsTemplate") && hrSmsTemplate.trim() !== initialHrSmsTemplate) {
+      patches.push({
+        key: "safety.heart_rate.sms_template",
+        value: hrSmsTemplate.trim(),
+      });
     }
 
     setSaving(true);
@@ -460,6 +588,134 @@ export function RobotSettingsForm({
           <Text style={styles.helper}>
             Geri sayım iptal edilmezse bağlı tüm kişilere bu mesaj gönderilir.
           </Text>
+        </View>
+      )}
+
+      {has("hrEnabled") && (
+        <View style={styles.safetyHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.fieldLabel}>Kalp Ritmi İzleyici</Text>
+            <Text style={styles.helper}>
+              Saatten gelen BPM örneklerini değerlendirir. Eşik aşılırsa robot
+              anons yapar ve telefon kişilere SMS gönderir.
+            </Text>
+          </View>
+          <Switch
+            value={hrEnabled}
+            onValueChange={setHrEnabled}
+            trackColor={{ false: "#1e293b", true: "#15803d" }}
+            thumbColor={hrEnabled ? "#22c55e" : "#475569"}
+          />
+        </View>
+      )}
+
+      {has("hrLowBpm") && (
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Min BPM (alt eşik)</Text>
+          <TextInput
+            value={hrLowBpm}
+            onChangeText={setHrLowBpm}
+            placeholder="örn. 40"
+            placeholderTextColor="#475569"
+            keyboardType="number-pad"
+            style={[styles.input, { outline: "none" } as any]}
+          />
+          <Text style={styles.helper}>
+            Bilekte ölçülen BPM bu değerin altına düşerse ve alt süre eşiği
+            kadar sürerse alarm tetiklenir.
+          </Text>
+        </View>
+      )}
+
+      {has("hrHighBpm") && (
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Max BPM (üst eşik)</Text>
+          <TextInput
+            value={hrHighBpm}
+            onChangeText={setHrHighBpm}
+            placeholder="örn. 130"
+            placeholderTextColor="#475569"
+            keyboardType="number-pad"
+            style={[styles.input, { outline: "none" } as any]}
+          />
+          <Text style={styles.helper}>
+            Bilekte ölçülen BPM bu değerin üstüne çıkarsa ve üst süre eşiği
+            kadar sürerse alarm tetiklenir.
+          </Text>
+        </View>
+      )}
+
+      {has("hrLowSeconds") && (
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Alt eşik süresi (sn)</Text>
+          <TextInput
+            value={hrLowSeconds}
+            onChangeText={setHrLowSeconds}
+            placeholder="örn. 15"
+            placeholderTextColor="#475569"
+            keyboardType="number-pad"
+            style={[styles.input, { outline: "none" } as any]}
+          />
+        </View>
+      )}
+
+      {has("hrHighSeconds") && (
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Üst eşik süresi (sn)</Text>
+          <TextInput
+            value={hrHighSeconds}
+            onChangeText={setHrHighSeconds}
+            placeholder="örn. 30"
+            placeholderTextColor="#475569"
+            keyboardType="number-pad"
+            style={[styles.input, { outline: "none" } as any]}
+          />
+        </View>
+      )}
+
+      {has("hrSuddenChangeBpm") && (
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Ani değişim BPM eşiği</Text>
+          <TextInput
+            value={hrSuddenChangeBpm}
+            onChangeText={setHrSuddenChangeBpm}
+            placeholder="örn. 30"
+            placeholderTextColor="#475569"
+            keyboardType="number-pad"
+            style={[styles.input, { outline: "none" } as any]}
+          />
+          <Text style={styles.helper}>
+            Aşağıdaki pencerede max-min farkı bu değeri aşarsa alarm tetiklenir.
+          </Text>
+        </View>
+      )}
+
+      {has("hrSuddenChangeWindowS") && (
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Ani değişim penceresi (sn)</Text>
+          <TextInput
+            value={hrSuddenChangeWindowS}
+            onChangeText={setHrSuddenChangeWindowS}
+            placeholder="örn. 30"
+            placeholderTextColor="#475569"
+            keyboardType="number-pad"
+            style={[styles.input, { outline: "none" } as any]}
+          />
+        </View>
+      )}
+
+      {has("hrSmsTemplate") && (
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>Kalp Ritmi SMS Şablonu</Text>
+          <TextInput
+            value={hrSmsTemplate}
+            onChangeText={setHrSmsTemplate}
+            placeholder="ACIL DURUM: ..."
+            placeholderTextColor="#475569"
+            multiline
+            numberOfLines={3}
+            style={[styles.input, styles.multiline, { outline: "none" } as any]}
+          />
         </View>
       )}
 
