@@ -2,7 +2,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.BODY_SENSORS" />
+    <!--
+        Android 15 (API 35) BODY_SENSORS'u deprecate etti; API 36 hedefli uygulamada
+        BODY_SENSORS isteği runtime'da dialog ÜRETMİYOR ve Ayarlar > İzinler altında
+        görünmüyor. Yeni isim: android.permission.health.READ_HEART_RATE. Eski cihaz
+        kalmadığı için (minSdk=36) BODY_SENSORS'u tamamen kaldırıyoruz.
+    -->
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />

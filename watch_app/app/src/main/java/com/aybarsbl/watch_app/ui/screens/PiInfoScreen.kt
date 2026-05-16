@@ -34,10 +34,13 @@ fun PiInfoScreen(onStart: () -> Unit, onBack: () -> Unit) {
     val pi by AppState.selectedPi.collectAsState()
     var status by remember { mutableStateOf("") }
 
-    // BODY_SENSORS olmadan nabız okunamaz, kritik.
+    // API 35+ üzerinde BODY_SENSORS deprecate edildi ve runtime dialog üretmiyor.
+    // Yeni granular izin: android.permission.health.READ_HEART_RATE.
+    // Manifest.permission sabiti henüz mevcut değil, string olarak veriyoruz.
     // POST_NOTIFICATIONS olmadan foreground notification görünmez ama servis çalışır.
+    val readHeartRate = "android.permission.health.READ_HEART_RATE"
     val permissions = buildList {
-        add(Manifest.permission.BODY_SENSORS)
+        add(readHeartRate)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -62,14 +65,14 @@ fun PiInfoScreen(onStart: () -> Unit, onBack: () -> Unit) {
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { result ->
-        val sensorsGranted = result[Manifest.permission.BODY_SENSORS] == true ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.BODY_SENSORS) ==
+        val hrGranted = result[readHeartRate] == true ||
+            ContextCompat.checkSelfPermission(context, readHeartRate) ==
             PackageManager.PERMISSION_GRANTED
-        if (sensorsGranted) {
+        if (hrGranted) {
             tryStartService()
         } else {
             status = "Nabız izni reddedildi. Ayarlar → Uygulamalar → watch_app → İzinler'den ver."
-            Log.w(TAG, "BODY_SENSORS denied; result=$result")
+            Log.w(TAG, "READ_HEART_RATE denied; result=$result")
         }
     }
 
