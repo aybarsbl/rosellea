@@ -286,7 +286,6 @@ class Microphone:
             rate=NATIVE_RATE,
             input=True,
             frames_per_buffer=FRAMES_PER_BUFFER,
-            output_device_index=0,
         )
 
         self._thread.open()

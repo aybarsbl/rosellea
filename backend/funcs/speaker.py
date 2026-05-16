@@ -59,11 +59,11 @@ class Speaker:
         silence = AudioSegment.silent(duration=self._duration)
         audio = silence + speech
         buf = BytesIO()
-        audio.export(buf, format="mp3")
+        audio.export(buf, format="wav")
         if self._pause_event is not None:
             self._pause_event.set()
         try:
-            play(audio=buf.getvalue())
+            subprocess.run(["aplay", "-D", "plughw:0,0"], input=buf.getvalue())
         finally:
             if self._pause_event is not None:
                 # Hoparlörden son ses kesildikten sonra echo kuyruğu için
