@@ -8,6 +8,7 @@ import androidx.health.services.client.data.Availability
 import androidx.health.services.client.data.DataPointContainer
 import androidx.health.services.client.data.DataType
 import androidx.health.services.client.data.DataTypeAvailability
+import androidx.health.services.client.data.DeltaDataType
 import androidx.health.services.client.data.SampleDataPoint
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -34,7 +35,7 @@ class HeartRateSource(private val context: Context) {
 
         val callback = object : MeasureCallback {
             override fun onAvailabilityChanged(
-                dataType: DataType<*, *>,
+                dataType: DeltaDataType<*, *>,
                 availability: Availability,
             ) {
                 Log.d(TAG, "availability: $availability")
@@ -57,8 +58,11 @@ class HeartRateSource(private val context: Context) {
         client.registerMeasureCallback(DataType.HEART_RATE_BPM, callback)
 
         awaitClose {
+            // unregisterMeasureCallbackAsync ListenableFuture döner; bekleme,
+            // hata yutma — sadece tetiklemek yeterli.
             runCatching {
                 client.unregisterMeasureCallbackAsync(DataType.HEART_RATE_BPM, callback)
+                Unit
             }
         }
     }

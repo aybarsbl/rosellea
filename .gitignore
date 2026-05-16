@@ -108,17 +108,37 @@ frontend/.gitignore
 frontend/*.apk
 
 # Android / Wear OS (watch_app)
-# Per-developer JVM seçimi — her makinede farklı, commit edilmemeli.
-watch_app/gradle/gradle-daemon-jvm.properties
+# Build çıktıları — hangi modülde olursa olsun. `build/` dizinlerini ignore
+# eder; üst seviyedeki `build.gradle.kts` / `build.gradle` dosyaları takip
+# edilmeye devam eder (sondaki `/` sadece dizin demek).
+**/build/
+# Gradle önbelleği / daemon state'i.
+**/.gradle/
 # Kotlin 2.x derleyici önbelleği.
-watch_app/.kotlin/
-# IDE'ye özel, geliştiriciye göre değişen Android Studio dosyaları.
+**/.kotlin/
+# Per-developer JVM seçimi — her makinede farklı.
+watch_app/gradle/gradle-daemon-jvm.properties
+# Android Studio'nun yerel state'i.
+watch_app/local.properties
 watch_app/.idea/caches/
 watch_app/.idea/deploymentTargetSelector.xml
 watch_app/.idea/deviceManager.xml
+watch_app/.idea/workspace.xml
+watch_app/.idea/shelf/
+# Native build artefaktları (NDK kullanılmıyor ama yine de).
+**/.externalNativeBuild/
+**/.cxx/
+# Capture/profil çıktıları.
+**/captures/
+# Lint raporları.
+**/lint-results-*.html
+**/lint-results-*.xml
+# Module dosyaları.
+*.iml
 # İmzalama anahtarları ve şifreleri — repo'ya asla girmemeli.
 *.keystore
 keystore.properties
 key.properties
-# APK çıktıları (build/ zaten ignore ediliyor, ama dışarı kopyalananlar için).
+# APK / AAB çıktıları (build/ zaten kapsıyor, dışarı kopyalananlar için).
 *.apk
+*.aab

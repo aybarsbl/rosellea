@@ -9,7 +9,6 @@ import com.aybarsbl.watch_app.data.PiDevice
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import java.net.Inet4Address
 import java.net.InetAddress
 
 // Rosellea Pi cihazlarını `_rosellea._tcp.local.` mDNS servis tipiyle bulur.
@@ -54,9 +53,8 @@ class NsdDiscovery(private val context: Context) {
                     }
 
                     override fun onServiceResolved(resolved: NsdServiceInfo) {
-                        val host: InetAddress? = resolved.host ?: return
-                        val ipv4 = if (host is Inet4Address) host.hostAddress else host.hostAddress
-                        val ip = ipv4 ?: return
+                        val addr: InetAddress = resolved.host ?: return
+                        val ip: String = addr.hostAddress ?: return
                         val name = resolved.attributes?.get("name")
                             ?.let { String(it) } ?: resolved.serviceName
                         val device = PiDevice(name = name, host = ip, port = resolved.port)
