@@ -7,6 +7,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.wifi.WifiManager
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -38,6 +39,7 @@ class HrForegroundService : LifecycleService() {
 
     private var hrJob: Job? = null
     private var postJob: Job? = null
+    private var wifiLock: WifiManager.WifiLock? = null
 
     override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
@@ -57,7 +59,39 @@ class HrForegroundService : LifecycleService() {
         } catch (e: Throwable) {
             Log.e(TAG, "startForeground failed", e)
         }
+        acquireWifiLock()
         AppState.running.value = true
+    }
+
+    private fun acquireWifiLock() {
+        // Galaxy Watch (Wear OS 6) ekran kapanır kapanmaz Wi-Fi radyosunu
+        // kapatıyor; HIGH_PERF lock'u ekran off iken bile bağlantıyı açık
+        // tutarak POST'ların kesilmesini engelliyor. Lock referans-sayılı,
+        // service'in tüm ömrü boyunca tutulur.
+        try {
+            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val lock = wm.createWifiLock(
+                WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+                "rosellea:wifi",
+            )
+            lock.setReferenceCounted(false)
+            lock.acquire()
+            wifiLock = lock
+            Log.d(TAG, "wifi lock acquired (HIGH_PERF)")
+        } catch (e: Throwable) {
+            Log.e(TAG, "wifi lock acquire failed", e)
+        }
+    }
+
+    private fun releaseWifiLock() {
+        try {
+            wifiLock?.takeIf { it.isHeld }?.release()
+            Log.d(TAG, "wifi lock released")
+        } catch (e: Throwable) {
+            Log.e(TAG, "wifi lock release failed", e)
+        } finally {
+            wifiLock = null
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -118,6 +152,7 @@ class HrForegroundService : LifecycleService() {
     override fun onDestroy() {
         hrJob?.cancel(); hrJob = null
         postJob?.cancel(); postJob = null
+        releaseWifiLock()
         AppState.running.value = false
         super.onDestroy()
     }
