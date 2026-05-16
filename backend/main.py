@@ -8,6 +8,7 @@ from openai import OpenAI
 from elevenlabs.client import ElevenLabs
 
 os.environ["OPENCV_LOG_LEVEL"] = "OFF"
+from data.env_defaults import DEFAULT_ENV
 from funcs import (
     database,
     discovery,
@@ -33,6 +34,10 @@ from funcs import (
 # -------------------
 base_path = os.path.dirname(os.path.abspath(__file__))
 _env = env.Environment(os.path.join(base_path, "data/env.json"))
+# Eski env.json sürümleri için: env_defaults.py'a sonradan eklenmiş
+# anahtarları (örn. safety.heart_rate) eksikse doldur. Mevcut değerlere
+# dokunmaz, kullanıcı reset etmek zorunda kalmadan yeni feature'lar açılır.
+_env.ensure_defaults(DEFAULT_ENV)
 is_active = threading.Event()
 quit = threading.Event()
 setup_ready = threading.Event()

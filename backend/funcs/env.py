@@ -41,3 +41,26 @@ class Environment:
 
     def reset(self, defaults: dict) -> bool:
         return self._write(defaults)
+
+    def ensure_defaults(self, defaults: dict) -> bool:
+        # Eski env.json sürümlerine sonradan eklenmiş anahtarları doldurur:
+        # mevcut değerleri ASLA override etmez, sadece eksik path'leri yazar.
+        # Yeni feature'ları (örn. safety.heart_rate) kullanıcı reset etmek
+        # zorunda kalmadan açabilsin diye.
+        data = self._read()
+        changed = self._merge_missing(data, defaults)
+        if changed:
+            return self._write(data)
+        return True
+
+    @staticmethod
+    def _merge_missing(target: dict, defaults: dict) -> bool:
+        changed = False
+        for key, default_value in defaults.items():
+            if key not in target:
+                target[key] = default_value
+                changed = True
+            elif isinstance(default_value, dict) and isinstance(target.get(key), dict):
+                if Environment._merge_missing(target[key], default_value):
+                    changed = True
+        return changed
