@@ -122,12 +122,17 @@ export default function RobotDetail() {
           getByPath(e, "safety.smoke.sms_template"),
           "ACIL DURUM: Rosellea ev içinde duman algıladı. Lütfen kontrol edin.",
         );
+        const smsTemplateHeartRate = asStringLoose(
+          getByPath(e, "safety.heart_rate.sms_template"),
+          "ACIL DURUM: Rosellea kalp ritmi anomalisi tespit etti. Lütfen kontrol edin.",
+        );
         const safetyEnabled = getByPath(e, "safety.smoke.enabled");
         setMonitoringContext({
           host: r.host,
           robotName: r.name,
           contacts,
           smsTemplate,
+          smsTemplateHeartRate,
           countdownS,
           threshold,
         });

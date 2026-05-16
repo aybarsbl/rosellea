@@ -36,6 +36,14 @@ class EmergencySent(BaseModel):
     count: int = 0
 
 
+class HeartRate(BaseModel):
+    heart_rate: int
+    on_wrist: bool
+    accuracy: str = "UNKNOWN"
+    timestamp: float | None = None
+    device_id: str = "watch"
+
+
 class Server:
     def __init__(
         self,
@@ -46,6 +54,7 @@ class Server:
         setup_ready: threading.Event | None = None,
         emergency: Optional[EmergencyManager] = None,
         smoke: Any = None,
+        vitals: Any = None,
     ):
         self.env = env
         self.name = name
@@ -56,6 +65,8 @@ class Server:
         # Smoke izleyici opsiyonel; sadece raw current değerini frontend'e
         # bandırmak için lazım. Tip Any çünkü Smoke hardware-failsafe.
         self.smoke = smoke
+        # Saatten gelen kalp ritmi örneklerini değerlendiren monitor.
+        self.vitals = vitals
 
         self.app = FastAPI(title="Rosellea")
         self.app.add_middleware(
@@ -168,6 +179,20 @@ class Server:
                     detail="Test modu kapalı (safety.smoke.test_enabled=false).",
                 )
             self.emergency.trigger(99999)
+            return {"ok": True}
+
+        @self.app.post("/vitals/heart_rate")
+        def vitals_heart_rate(body: HeartRate):
+            if self.vitals is None:
+                raise HTTPException(status_code=503, detail="Vitals yöneticisi yok")
+            ts = body.timestamp if body.timestamp else time.time()
+            self.vitals.ingest(
+                body.device_id,
+                body.heart_rate,
+                body.on_wrist,
+                body.accuracy,
+                ts,
+            )
             return {"ok": True}
 
         @self.app.get("/events")

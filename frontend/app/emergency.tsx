@@ -18,6 +18,7 @@ import {
 } from "../lib/emergency";
 import {
   getMonitoringContext,
+  pickSmsTemplate,
   subscribeContext,
 } from "../lib/emergencyStore";
 
@@ -38,6 +39,7 @@ export default function EmergencyScreen() {
   const [info, setInfo] = useState<string>("");
   const [sentCount, setSentCount] = useState<number>(0);
   const [cancelSource, setCancelSource] = useState<string>("");
+  const [emergencySource, setEmergencySource] = useState<string>("smoke");
   const startedAtRef = useRef<number>(Date.now() / 1000);
   const countdownRef = useRef<number>(ctx.countdownS || 10);
   const phaseRef = useRef<Phase>("armed");
@@ -63,6 +65,9 @@ export default function EmergencyScreen() {
         }
         if (snap.started_at > 0) {
           startedAtRef.current = snap.started_at;
+        }
+        if ((snap as any).source) {
+          setEmergencySource((snap as any).source);
         }
         if (snap.state === "fired" || snap.state === "sent") {
           setPhase(snap.state === "sent" ? "sent" : "fired");
@@ -103,6 +108,7 @@ export default function EmergencyScreen() {
       if (e.type === "emergency.armed") {
         if (e.countdown_s) countdownRef.current = e.countdown_s;
         if (e.started_at) startedAtRef.current = e.started_at;
+        if ((e as any).source) setEmergencySource((e as any).source);
         phaseRef.current = "armed";
         setPhase("armed");
       } else if (e.type === "emergency.cancelled") {
@@ -162,7 +168,8 @@ export default function EmergencyScreen() {
       return;
     }
     setPhase("sending");
-    fireSms(host, ctx.contacts, ctx.smsTemplate)
+    const template = pickSmsTemplate(emergencySource);
+    fireSms(host, ctx.contacts, template)
       .then((count) => {
         setSentCount(count);
         if (count > 0) {
@@ -191,7 +198,7 @@ export default function EmergencyScreen() {
           setInfo(`SMS hatası: ${err?.message ?? "bilinmeyen"}`);
         }
       });
-  }, [phase, ctx.host, ctx.contacts, ctx.smsTemplate, router]);
+  }, [phase, ctx.host, ctx.contacts, ctx.smsTemplate, ctx.smsTemplateHeartRate, emergencySource, router]);
 
   const handleCancel = useCallback(async () => {
     const host = ctx.host;
@@ -216,7 +223,11 @@ export default function EmergencyScreen() {
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <View style={styles.body}>
         <Text style={styles.title}>ACİL DURUM</Text>
-        <Text style={styles.subtitle}>Duman algılandı</Text>
+        <Text style={styles.subtitle}>
+          {emergencySource === "heart_rate"
+            ? "Kalp ritmi anomalisi"
+            : "Duman algılandı"}
+        </Text>
 
         {(phase === "armed" || phase === "cancelling") && (
           <>

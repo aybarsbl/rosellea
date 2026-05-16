@@ -24,6 +24,7 @@ from funcs import (
     threads,
     microphone,
     tools,
+    vitals,
     wifi,
 )
 
@@ -148,6 +149,11 @@ Emergency = emergency.EmergencyManager(
     messages=Messages,
     countdown_s=_env.get("safety.smoke.countdown_s") or 10,
 )
+Vitals = (
+    vitals.VitalsMonitor(emergency=Emergency, env=_env)
+    if _env.get("safety.heart_rate.enabled")
+    else None
+)
 Smoke = smoke.Smoke(
     on_detected=Emergency.trigger,
     threshold=_env.get("safety.smoke.threshold") or 18000,
@@ -172,6 +178,7 @@ HttpServer = server.Server(
     setup_ready=setup_ready,
     emergency=Emergency,
     smoke=Smoke,
+    vitals=Vitals,
 )
 Discovery = discovery.Discovery(name=ROBOT_NAME, port=HTTP_PORT)
 Provisioning = provisioning.Provisioning(

@@ -17,6 +17,7 @@ type State = {
   robotName: string;
   contacts: Contact[];
   smsTemplate: string;
+  smsTemplateHeartRate: string;
   countdownS: number;
   threshold: number;
 };
@@ -26,9 +27,17 @@ const state: State = {
   robotName: "",
   contacts: [],
   smsTemplate: "ACIL DURUM: Rosellea ev içinde duman algıladı. Lütfen kontrol edin.",
+  smsTemplateHeartRate:
+    "ACIL DURUM: Rosellea kalp ritmi anomalisi tespit etti. Lütfen kontrol edin.",
   countdownS: 10,
   threshold: 18000,
 };
+
+// armed event'indeki source alanına göre uygun şablonu seç.
+export function pickSmsTemplate(source?: string | null): string {
+  if (source === "heart_rate") return state.smsTemplateHeartRate;
+  return state.smsTemplate;
+}
 
 type Listener = () => void;
 const listeners = new Set<Listener>();

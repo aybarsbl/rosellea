@@ -106,3 +106,19 @@ frontend/expo-env.d.ts
 
 frontend/.gitignore
 frontend/*.apk
+
+# Android / Wear OS (watch_app)
+# Per-developer JVM seçimi — her makinede farklı, commit edilmemeli.
+watch_app/gradle/gradle-daemon-jvm.properties
+# Kotlin 2.x derleyici önbelleği.
+watch_app/.kotlin/
+# IDE'ye özel, geliştiriciye göre değişen Android Studio dosyaları.
+watch_app/.idea/caches/
+watch_app/.idea/deploymentTargetSelector.xml
+watch_app/.idea/deviceManager.xml
+# İmzalama anahtarları ve şifreleri — repo'ya asla girmemeli.
+*.keystore
+keystore.properties
+key.properties
+# APK çıktıları (build/ zaten ignore ediliyor, ama dışarı kopyalananlar için).
+*.apk

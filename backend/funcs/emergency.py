@@ -34,6 +34,7 @@ class EmergencyManager:
         self._lock = threading.Lock()
         self._state: str = self.STATE_IDLE
         self._raw: int = 0
+        self._source: str = "smoke"
         self._started_at: float = 0.0
         self._fired_at: float = 0.0
         self._sent_count: int = 0
@@ -56,6 +57,7 @@ class EmergencyManager:
             return {
                 "state": self._state,
                 "raw": self._raw,
+                "source": self._source,
                 "threshold": int(self._env.get("safety.smoke.threshold") or 0),
                 "started_at": self._started_at,
                 "fired_at": self._fired_at,
@@ -63,21 +65,31 @@ class EmergencyManager:
                 "sent_count": self._sent_count,
             }
 
-    def trigger(self, raw_value: int):
+    def trigger(self, raw_value: int, source: str = "smoke"):
         with self._lock:
             if self._state in (self.STATE_ARMED, self.STATE_FIRED):
                 return
             self._state = self.STATE_ARMED
             self._raw = int(raw_value)
+            self._source = str(source) or "smoke"
             self._started_at = time.time()
             self._fired_at = 0.0
             self._sent_count = 0
             countdown = self._countdown_s
+            current_source = self._source
 
-        self._log(f"[Acil Durum] Duman algılandı (raw={raw_value}). Geri sayım başladı.")
+        if current_source == "heart_rate":
+            self._log(
+                f"[Acil Durum] Kalp ritmi anomalisi (hr={raw_value}). Geri sayım başladı."
+            )
+        else:
+            self._log(
+                f"[Acil Durum] Duman algılandı (raw={raw_value}). Geri sayım başladı."
+            )
         self._publish({
             "type": "emergency.armed",
             "raw": raw_value,
+            "source": current_source,
             "countdown_s": countdown,
             "started_at": self._started_at,
         })
@@ -122,6 +134,7 @@ class EmergencyManager:
         self._publish({
             "type": "emergency.armed",
             "raw": self._raw,
+            "source": self._source,
             "countdown_s": countdown,
             "started_at": self._started_at,
             "phase": "after_announce",
@@ -186,6 +199,7 @@ class EmergencyManager:
         with self._lock:
             self._state = self.STATE_IDLE
             self._raw = 0
+            self._source = "smoke"
             self._started_at = 0.0
             self._fired_at = 0.0
             self._sent_count = 0

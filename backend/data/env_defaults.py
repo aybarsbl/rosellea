@@ -75,5 +75,18 @@ DEFAULT_ENV = {
             "sms_template": "ACIL DURUM: Rosellea ev içinde duman algıladı. Lütfen kontrol edin.",
             "test_enabled": False,
         },
+        "heart_rate": {
+            "enabled": True,
+            "sustained_zero_seconds": 5,
+            "low_threshold_bpm": 40,
+            "low_threshold_seconds": 15,
+            "high_threshold_bpm": 130,
+            "high_threshold_seconds": 30,
+            "sudden_change_bpm": 30,
+            "sudden_change_window_s": 30,
+            "sample_buffer_seconds": 120,
+            "sms_template": "ACIL DURUM: Rosellea kalp ritmi anomalisi tespit etti. Lütfen kontrol edin.",
+            "test_enabled": False,
+        },
     },
 }
