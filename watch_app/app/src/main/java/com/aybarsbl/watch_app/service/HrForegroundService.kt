@@ -47,11 +47,16 @@ class HrForegroundService : LifecycleService() {
     override fun onCreate() {
         super.onCreate()
         ensureChannel()
-        startForeground(
-            NOTIF_ID,
-            buildNotification("Nabız izleniyor"),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH,
-        )
+        try {
+            startForeground(
+                NOTIF_ID,
+                buildNotification("Nabız izleniyor"),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH,
+            )
+            Log.d(TAG, "foreground service started (type=health)")
+        } catch (e: Throwable) {
+            Log.e(TAG, "startForeground failed", e)
+        }
         AppState.running.value = true
     }
 
@@ -73,11 +78,16 @@ class HrForegroundService : LifecycleService() {
 
     private fun startHrCollection() {
         hrJob = lifecycleScope.launch {
-            HeartRateSource(this@HrForegroundService).flow().collect { sample ->
-                AppState.hrBpm.value = sample.bpm
-                AppState.accuracy.value = sample.accuracy
-                AppState.onWrist.value = sample.available &&
-                    !sample.accuracy.contains("NO_CONTACT", ignoreCase = true)
+            try {
+                HeartRateSource(this@HrForegroundService).flow().collect { sample ->
+                    Log.v(TAG, "hr=${sample.bpm} acc=${sample.accuracy} avail=${sample.available}")
+                    AppState.hrBpm.value = sample.bpm
+                    AppState.accuracy.value = sample.accuracy
+                    AppState.onWrist.value = sample.available &&
+                        !sample.accuracy.contains("NO_CONTACT", ignoreCase = true)
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "HR collection error", e)
             }
         }
     }
@@ -100,6 +110,7 @@ class HrForegroundService : LifecycleService() {
                 }
                 AppState.lastPostAt.value = System.currentTimeMillis()
                 AppState.lastPostOk.value = ok
+                Log.d(TAG, "post hr=${AppState.hrBpm.value} on_wrist=${AppState.onWrist.value} ok=$ok pi=${pi.host}:${pi.port}")
             }
         }
     }

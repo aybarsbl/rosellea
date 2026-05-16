@@ -9,7 +9,6 @@ import pyaudio
 from openai import OpenAI
 from funcs import threads
 
-
 # USB ses cihazı native 48 kHz stereo. Pyaudio'yu 16 kHz mono açtığımızda
 # PortAudio kendi düşük kalite resampler/channel-mixer'ını devreye sokuyor
 # ve sinyalin büyük kısmını kaybediyoruz (RMS ~120 — neredeyse gürültü
@@ -287,6 +286,7 @@ class Microphone:
             rate=NATIVE_RATE,
             input=True,
             frames_per_buffer=FRAMES_PER_BUFFER,
+            output_device_index=0,
         )
 
         self._thread.open()

@@ -3,6 +3,7 @@ package com.aybarsbl.watch_app.ui.screens
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -12,6 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -22,11 +26,16 @@ import androidx.wear.compose.material3.Text
 import com.aybarsbl.watch_app.data.AppState
 import com.aybarsbl.watch_app.service.ServiceController
 
+private const val TAG = "PiInfoScreen"
+
 @Composable
 fun PiInfoScreen(onStart: () -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
     val pi by AppState.selectedPi.collectAsState()
+    var status by remember { mutableStateOf("") }
 
+    // BODY_SENSORS olmadan nabız okunamaz, kritik.
+    // POST_NOTIFICATIONS olmadan foreground notification görünmez ama servis çalışır.
     val permissions = buildList {
         add(Manifest.permission.BODY_SENSORS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -34,15 +43,33 @@ fun PiInfoScreen(onStart: () -> Unit, onBack: () -> Unit) {
         }
     }.toTypedArray()
 
+    fun tryStartService() {
+        val p = pi
+        if (p == null) {
+            status = "Cihaz seçilmedi"
+            return
+        }
+        try {
+            ServiceController.start(context, p)
+            status = "Başlatılıyor..."
+            onStart()
+        } catch (e: Throwable) {
+            Log.e(TAG, "service start failed", e)
+            status = "Hata: ${e.message ?: e.javaClass.simpleName}"
+        }
+    }
+
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { result ->
-        val allGranted = result.values.all { it }
-        if (allGranted) {
-            pi?.let { p ->
-                ServiceController.start(context, p)
-                onStart()
-            }
+        val sensorsGranted = result[Manifest.permission.BODY_SENSORS] == true ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.BODY_SENSORS) ==
+            PackageManager.PERMISSION_GRANTED
+        if (sensorsGranted) {
+            tryStartService()
+        } else {
+            status = "Nabız izni reddedildi. Ayarlar → Uygulamalar → watch_app → İzinler'den ver."
+            Log.w(TAG, "BODY_SENSORS denied; result=$result")
         }
     }
 
@@ -55,18 +82,19 @@ fun PiInfoScreen(onStart: () -> Unit, onBack: () -> Unit) {
     ) {
         Text(text = pi?.name ?: "Cihaz seçili değil")
         Text(text = pi?.let { "${it.host}:${it.port}" } ?: "")
+        if (status.isNotBlank()) {
+            Text(text = status)
+        }
         Button(
             onClick = {
                 val missing = permissions.any {
                     ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
                 }
                 if (missing) {
+                    status = "İzin isteniyor..."
                     launcher.launch(permissions)
                 } else {
-                    pi?.let { p ->
-                        ServiceController.start(context, p)
-                        onStart()
-                    }
+                    tryStartService()
                 }
             },
             enabled = pi != null,
