@@ -59,6 +59,8 @@ fun MeasureScreen() {
     val context = LocalContext.current
     val bpm by AppState.hrBpm.collectAsState()
     val running by AppState.running.collectAsState()
+    val lastSendOk by AppState.lastSendOk.collectAsState()
+    val lastSendAt by AppState.lastSendAt.collectAsState()
     var statusMsg by remember { mutableStateOf("") }
 
     val permissions = remember {
@@ -156,6 +158,14 @@ fun MeasureScreen() {
                     Text(
                         text = statusMsg,
                         color = RoselleaTextSecondary,
+                        fontSize = 10.sp,
+                    )
+                } else if (running && lastSendAt > 0L) {
+                    Text(
+                        text = if (lastSendOk) "Telefona gönderildi"
+                               else "Telefon bulunamadı",
+                        color = if (lastSendOk) RoselleaTextSecondary
+                                else RoselleaDanger,
                         fontSize = 10.sp,
                     )
                 }

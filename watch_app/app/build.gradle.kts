@@ -1,7 +1,23 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
+
+// local.properties'ten keystore bilgilerini oku. EAS managed keystore'u
+// indirip "watch_app/keystore/rosellea.jks" altına yerleştirin; ROSELLEA_*
+// değerlerini local.properties'e yazın (git'e gitmez). Wear OS Data Layer
+// telefon ve saat APK'larının aynı anahtarla imzalanmasını şart koşuyor.
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val ksFile: String? = localProps.getProperty("ROSELLEA_KS_FILE")
+val ksPwd: String? = localProps.getProperty("ROSELLEA_KS_PASSWORD")
+val keyAlias: String? = localProps.getProperty("ROSELLEA_KEY_ALIAS")
+val keyPwd: String? = localProps.getProperty("ROSELLEA_KEY_PASSWORD")
+val hasSigningConfig = ksFile != null && ksPwd != null && keyAlias != null && keyPwd != null
 
 android {
     namespace = "com.aybarsbl.watch_app"
@@ -17,16 +33,34 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+    }
 
+    if (hasSigningConfig) {
+        signingConfigs {
+            create("rosellea") {
+                storeFile = rootProject.file(ksFile!!)
+                storePassword = ksPwd
+                this.keyAlias = keyAlias
+                keyPassword = keyPwd
+            }
+        }
     }
 
     buildTypes {
+        debug {
+            if (hasSigningConfig) {
+                signingConfig = signingConfigs.getByName("rosellea")
+            }
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasSigningConfig) {
+                signingConfig = signingConfigs.getByName("rosellea")
+            }
         }
     }
     compileOptions {
