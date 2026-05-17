@@ -15,9 +15,9 @@ val localProps = Properties().apply {
 }
 val ksFile: String? = localProps.getProperty("ROSELLEA_KS_FILE")
 val ksPwd: String? = localProps.getProperty("ROSELLEA_KS_PASSWORD")
-val keyAlias: String? = localProps.getProperty("ROSELLEA_KEY_ALIAS")
-val keyPwd: String? = localProps.getProperty("ROSELLEA_KEY_PASSWORD")
-val hasSigningConfig = ksFile != null && ksPwd != null && keyAlias != null && keyPwd != null
+val ksKeyAlias: String? = localProps.getProperty("ROSELLEA_KEY_ALIAS")
+val ksKeyPwd: String? = localProps.getProperty("ROSELLEA_KEY_PASSWORD")
+val hasSigningConfig = ksFile != null && ksPwd != null && ksKeyAlias != null && ksKeyPwd != null
 
 android {
     namespace = "com.aybarsbl.watch_app"
@@ -40,8 +40,8 @@ android {
             create("rosellea") {
                 storeFile = rootProject.file(ksFile!!)
                 storePassword = ksPwd
-                this.keyAlias = keyAlias
-                keyPassword = keyPwd
+                keyAlias = ksKeyAlias
+                keyPassword = ksKeyPwd
             }
         }
     }
