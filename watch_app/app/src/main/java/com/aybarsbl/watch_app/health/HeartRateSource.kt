@@ -88,11 +88,9 @@ class HeartRateSource(private val context: Context) {
                         .onFailure { Log.e(TAG, "resume failed", it) }
                 }
 
-                // Bittiyse yeniden başlat. ENDED/TERMINATED'ta session öldü.
-                if (state == ExerciseState.ENDED ||
-                    state == ExerciseState.AUTO_ENDED ||
-                    state == ExerciseState.TERMINATED
-                ) {
+                // Bittiyse yeniden başlat. ENDED state hem USER_END hem
+                // AUTO_END_* reason'larını kapsıyor — endReason ile detay.
+                if (state == ExerciseState.ENDED) {
                     Log.w(TAG, "exercise ended (reason=$endReason); restarting")
                     restartExercise(client, this, ioExecutor)
                 }
