@@ -12,4 +12,8 @@ object AppState {
     val running = MutableStateFlow(false)
     val lastSendAt = MutableStateFlow(0L)
     val lastSendOk = MutableStateFlow(true)
+    // ExerciseClient'tan son geçerli HR sample alınma zamanı. Stale tespitinde
+    // kullanılır: send loop ve UI bu değere bakıp eski örneği zombi göstermez.
+    val lastHrUpdateAt = MutableStateFlow(0L)
+    val exerciseState = MutableStateFlow("UNKNOWN")
 }

@@ -23,21 +23,20 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 // Saatte arkaplanda sürekli çalışan foreground service. type=health Android 14+
-// üzerinde Health Services'a arkaplan erişim hakkı veriyor; sensor akışı ekran
-// kapalıyken bile kesilmiyor. BPM artık doğrudan HTTP ile gönderilmiyor —
-// WearableBridge üzerinden eşli telefona iletilir, telefon Pi'ye forward eder.
+// üzerinde Health Services'a arkaplan erişim hakkı veriyor. BPM telefona
+// Wearable Data Layer ile gider, telefon Pi'ye forward eder.
 //
-// Ek olarak partial wakelock alıyoruz: foreground service + battery exemption
-// CPU'nun derin uykuya dalmasını yine de tek başına garanti etmiyor;
-// PARTIAL_WAKE_LOCK olmadan coroutine `delay()` ve Wearable sendMessage
-// çağrıları doze altında geç tetikleniyor. Send döngüsünü Dispatchers.Default
-// üzerinde çalıştırıyoruz ki Main looper'a bağımlı olmasın.
+// Stale koruma: son HR güncellemesinin üzerinden HR_STALE_AFTER_MS geçtiyse
+// gönderim payload'ında bpm=0 ve stale=true işaretliyoruz. Bu sayede
+// ExerciseClient session'ı sessizce duraklarsa telefon ve Pi tarafı eski
+// değeri zombi gibi göstermez.
 class HrForegroundService : LifecycleService() {
     companion object {
         private const val TAG = "HrForegroundService"
         private const val CHANNEL_ID = "rosellea_hr"
         private const val NOTIF_ID = 4711
         private const val SEND_INTERVAL_MS = 5_000L
+        private const val HR_STALE_AFTER_MS = 10_000L
         private const val WAKELOCK_TAG = "Rosellea::HrWakelock"
     }
 
@@ -78,11 +77,21 @@ class HrForegroundService : LifecycleService() {
         hrJob = lifecycleScope.launch(Dispatchers.Default) {
             try {
                 HeartRateSource(this@HrForegroundService).flow().collect { sample ->
-                    Log.v(TAG, "hr=${sample.bpm} acc=${sample.accuracy} avail=${sample.available}")
-                    AppState.hrBpm.value = sample.bpm
-                    AppState.accuracy.value = sample.accuracy
-                    AppState.onWrist.value = sample.available &&
-                        !sample.accuracy.contains("NO_CONTACT", ignoreCase = true)
+                    Log.v(
+                        TAG,
+                        "hr=${sample.bpm} acc=${sample.accuracy} avail=${sample.available} state=${sample.state}",
+                    )
+                    AppState.exerciseState.value = sample.state
+                    if (sample.available && sample.bpm > 0) {
+                        AppState.hrBpm.value = sample.bpm
+                        AppState.accuracy.value = sample.accuracy
+                        AppState.onWrist.value =
+                            !sample.accuracy.contains("NO_CONTACT", ignoreCase = true)
+                        AppState.lastHrUpdateAt.value = System.currentTimeMillis()
+                    } else {
+                        AppState.onWrist.value = false
+                        AppState.accuracy.value = sample.accuracy
+                    }
                 }
             } catch (e: Throwable) {
                 Log.e(TAG, "HR collection error", e)
@@ -94,20 +103,31 @@ class HrForegroundService : LifecycleService() {
         sendJob = lifecycleScope.launch(Dispatchers.Default) {
             while (isActive) {
                 delay(SEND_INTERVAL_MS)
+                val now = System.currentTimeMillis()
+                val lastHrAt = AppState.lastHrUpdateAt.value
+                val stale = lastHrAt == 0L || (now - lastHrAt) > HR_STALE_AFTER_MS
+                val effectiveBpm = if (stale) 0 else AppState.hrBpm.value
+                val effectiveOnWrist = if (stale) false else AppState.onWrist.value
+
                 val ok = runCatching {
                     WearableBridge.sendBpm(
                         ctx = applicationContext,
-                        hr = AppState.hrBpm.value,
-                        onWrist = AppState.onWrist.value,
+                        hr = effectiveBpm,
+                        onWrist = effectiveOnWrist,
                         accuracy = AppState.accuracy.value,
+                        stale = stale,
+                        exerciseState = AppState.exerciseState.value,
                     )
                 }.getOrElse {
                     Log.w(TAG, "bridge send failed", it)
                     false
                 }
-                AppState.lastSendAt.value = System.currentTimeMillis()
+                AppState.lastSendAt.value = now
                 AppState.lastSendOk.value = ok
-                Log.d(TAG, "bridge hr=${AppState.hrBpm.value} on_wrist=${AppState.onWrist.value} ok=$ok")
+                Log.d(
+                    TAG,
+                    "bridge hr=$effectiveBpm stale=$stale state=${AppState.exerciseState.value} ok=$ok",
+                )
             }
         }
     }

@@ -9,6 +9,14 @@
         kalmadığı için (minSdk=36) BODY_SENSORS'u tamamen kaldırıyoruz.
     -->
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <!--
+        Android 13'ten itibaren arkaplan sensör erişimi için ayrı izin
+        gerekiyor. Foreground service type=health ile birlikte runtime'da
+        ayrı bir prompt çıkmıyor (bir defalık birleşik dialogla geliyor)
+        ama izni mutlaka manifestte beyan etmek lazım, yoksa system
+        screen-off'ta sensor stream'ini kesiyor.
+    -->
+    <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />

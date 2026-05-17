@@ -61,7 +61,16 @@ fun MeasureScreen() {
     val running by AppState.running.collectAsState()
     val lastSendOk by AppState.lastSendOk.collectAsState()
     val lastSendAt by AppState.lastSendAt.collectAsState()
+    val lastHrAt by AppState.lastHrUpdateAt.collectAsState()
     var statusMsg by remember { mutableStateOf("") }
+    val now = remember { mutableStateOf(System.currentTimeMillis()) }
+    androidx.compose.runtime.LaunchedEffect(running) {
+        while (running) {
+            now.value = System.currentTimeMillis()
+            kotlinx.coroutines.delay(1_000)
+        }
+    }
+    val isStale = lastHrAt == 0L || (now.value - lastHrAt) > 10_000L
 
     val permissions = remember {
         buildList {
@@ -149,7 +158,7 @@ fun MeasureScreen() {
                     modifier = Modifier.scale(pulse),
                 )
                 Text(
-                    text = if (running && bpm > 0) "$bpm" else "--",
+                    text = if (running && bpm > 0 && !isStale) "$bpm" else "--",
                     color = RoselleaTextPrimary,
                     fontSize = 44.sp,
                     fontWeight = FontWeight.Black,

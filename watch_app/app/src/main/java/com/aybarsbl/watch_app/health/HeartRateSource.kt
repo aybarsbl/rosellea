@@ -2,6 +2,7 @@ package com.aybarsbl.watch_app.health
 
 import android.content.Context
 import android.util.Log
+import androidx.health.services.client.ExerciseClient
 import androidx.health.services.client.ExerciseUpdateCallback
 import androidx.health.services.client.HealthServices
 import androidx.health.services.client.data.Availability
@@ -9,6 +10,7 @@ import androidx.health.services.client.data.DataType
 import androidx.health.services.client.data.DataTypeAvailability
 import androidx.health.services.client.data.ExerciseConfig
 import androidx.health.services.client.data.ExerciseLapSummary
+import androidx.health.services.client.data.ExerciseState
 import androidx.health.services.client.data.ExerciseType
 import androidx.health.services.client.data.ExerciseUpdate
 import kotlinx.coroutines.Dispatchers
@@ -21,17 +23,19 @@ data class HrSample(
     val bpm: Int,
     val accuracy: String,
     val available: Boolean,
+    val state: String,
 )
 
 // Wear OS'ta ekran kapalıyken sürekli HR alabilmenin tek desteklenen yolu
 // ExerciseClient üzerinden bir egzersiz oturumu açmaktır. MeasureClient yalnız
-// "active engagement" (kullanıcı app'i izliyor) senaryoları için tasarlanmış;
-// foreground service type=health bile olsa Health Services screen-off'ta
-// MeasureClient akışını duraklatıyor — gözlemlenen "ekran kararınca veri
-// duruyor" davranışı tam olarak bu. ExerciseClient ise always-on bir oturum
-// sözleşmesi olduğundan sensör akışı kesintisiz gelir. WORKOUT generic tipini
-// seçiyoruz; sadece HEART_RATE_BPM data type'ı istiyoruz, GPS ve auto-pause
-// kapalı.
+// "active engagement" senaryoları için tasarlanmış; foreground service
+// type=health bile olsa Health Services screen-off'ta MeasureClient akışını
+// duraklatıyor. ExerciseClient ise always-on bir oturum sözleşmesi.
+//
+// One UI Watch + Samsung Health bazen ExerciseClient session'ını da
+// duraklatıyor (USER_PAUSED) veya başka bir app devraldığında bizimkini
+// sonlandırıyor (AUTO_ENDED/AUTO_END_SUPERSEDED). Bu yüzden state'i izleyip
+// PAUSED'ta resume, ENDED/TERMINATED'ta restart yapıyoruz.
 class HeartRateSource(private val context: Context) {
     companion object {
         private const val TAG = "HeartRateSource"
@@ -39,6 +43,7 @@ class HeartRateSource(private val context: Context) {
 
     fun flow(): Flow<HrSample> = callbackFlow {
         val client = HealthServices.getClient(context).exerciseClient
+        val ioExecutor = Dispatchers.IO.asExecutor()
 
         val callback = object : ExerciseUpdateCallback {
             override fun onRegistered() {
@@ -58,38 +63,82 @@ class HeartRateSource(private val context: Context) {
                     availability != DataTypeAvailability.AVAILABLE &&
                     availability != DataTypeAvailability.ACQUIRING
                 ) {
-                    trySend(HrSample(bpm = 0, accuracy = "UNAVAILABLE", available = false))
+                    trySend(
+                        HrSample(
+                            bpm = 0,
+                            accuracy = "UNAVAILABLE",
+                            available = false,
+                            state = "AVAILABILITY_${availability}",
+                        ),
+                    )
                 }
             }
 
             override fun onExerciseUpdateReceived(update: ExerciseUpdate) {
+                val state = update.exerciseStateInfo.state
+                val endReason = update.exerciseStateInfo.endReason
+                val stateName = state.toString()
+                Log.d(TAG, "exercise state=$stateName endReason=$endReason")
+
+                // Pause olursa resume et. AutoPause'u config'te kapattık ama
+                // sistem yine de USER_PAUSED tetikleyebiliyor.
+                if (state == ExerciseState.USER_PAUSED || state == ExerciseState.AUTO_PAUSED) {
+                    Log.w(TAG, "exercise paused; calling resumeExerciseAsync()")
+                    runCatching { client.resumeExerciseAsync() }
+                        .onFailure { Log.e(TAG, "resume failed", it) }
+                }
+
+                // Bittiyse yeniden başlat. ENDED/TERMINATED'ta session öldü.
+                if (state == ExerciseState.ENDED ||
+                    state == ExerciseState.AUTO_ENDED ||
+                    state == ExerciseState.TERMINATED
+                ) {
+                    Log.w(TAG, "exercise ended (reason=$endReason); restarting")
+                    restartExercise(client, this, ioExecutor)
+                }
+
                 val samples = update.latestMetrics.getData(DataType.HEART_RATE_BPM)
                 for (sample in samples) {
                     val bpm = sample.value.toInt()
                     val accuracyName = sample.accuracy?.toString() ?: "UNKNOWN"
-                    trySend(HrSample(bpm = bpm, accuracy = accuracyName, available = true))
+                    trySend(
+                        HrSample(
+                            bpm = bpm,
+                            accuracy = accuracyName,
+                            available = true,
+                            state = stateName,
+                        ),
+                    )
                 }
             }
 
             override fun onLapSummaryReceived(summary: ExerciseLapSummary) {}
         }
 
-        // setUpdateCallback startExerciseAsync'ten ÖNCE çağrılmalı, yoksa
-        // başlangıç güncellemeleri kaybolur.
         client.setUpdateCallback(callback)
+        startExercise(client, callback, ioExecutor)
 
+        awaitClose {
+            runCatching { client.endExerciseAsync() }
+            runCatching { client.clearUpdateCallbackAsync(callback) }
+            Log.d(TAG, "exercise ended on flow close")
+        }
+    }
+
+    private fun startExercise(
+        client: ExerciseClient,
+        callback: ExerciseUpdateCallback,
+        executor: java.util.concurrent.Executor,
+    ) {
         val config = ExerciseConfig.builder(ExerciseType.WORKOUT)
             .setDataTypes(setOf(DataType.HEART_RATE_BPM))
             .setIsAutoPauseAndResumeEnabled(false)
             .setIsGpsEnabled(false)
             .build()
 
-        val ioExecutor = Dispatchers.IO.asExecutor()
-        val startFuture = client.startExerciseAsync(config)
-        startFuture.addListener({
-            runCatching { startFuture.get() }.onFailure { e ->
-                // Cihazda başka bir egzersiz aktifse "already active" alabiliriz;
-                // mevcut oturumu kapatıp yeniden deneriz.
+        val future = client.startExerciseAsync(config)
+        future.addListener({
+            runCatching { future.get() }.onFailure { e ->
                 Log.w(TAG, "startExercise failed: ${e.message}; cleanup + retry")
                 runCatching {
                     client.endExerciseAsync().get()
@@ -99,12 +148,21 @@ class HeartRateSource(private val context: Context) {
                     Log.e(TAG, "exercise restart failed", e2)
                 }
             }
-        }, ioExecutor)
+        }, executor)
+    }
 
-        awaitClose {
-            runCatching { client.endExerciseAsync() }
-            runCatching { client.clearUpdateCallbackAsync(callback) }
-            Log.d(TAG, "exercise ended on flow close")
+    private fun restartExercise(
+        client: ExerciseClient,
+        callback: ExerciseUpdateCallback,
+        executor: java.util.concurrent.Executor,
+    ) {
+        // Aynı thread'de Synchronous restart yapma; SDK callback thread'inde
+        // get() blokerleri deadlock'a yol açabilir. Executor üzerinde işleyelim.
+        executor.execute {
+            runCatching {
+                client.endExerciseAsync().get()
+            }
+            startExercise(client, callback, executor)
         }
     }
 }

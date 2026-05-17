@@ -35,6 +35,8 @@ object WearableBridge {
         hr: Int,
         onWrist: Boolean,
         accuracy: String,
+        stale: Boolean = false,
+        exerciseState: String = "UNKNOWN",
     ): Boolean = withContext(Dispatchers.IO) {
         val nodes = resolveNodes(ctx)
         if (nodes.isEmpty()) {
@@ -47,6 +49,8 @@ object WearableBridge {
             put("accuracy", accuracy)
             put("timestamp", System.currentTimeMillis() / 1000.0)
             put("device_id", Build.MODEL ?: "watch")
+            put("stale", stale)
+            put("exercise_state", exerciseState)
         }.toString().toByteArray(Charsets.UTF_8)
 
         var anyOk = false
