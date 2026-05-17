@@ -19,7 +19,13 @@ import java.util.concurrent.TimeUnit
 object WearableBridge {
     private const val TAG = "WearableBridge"
     private const val PATH_BPM = "/rosellea/bpm"
-    private const val NODE_TTL_MS = 30_000L
+    // Doze altında BT advertisement aralıkları büyür; node listesi uzun süre
+    // cache'lenirse fiziksel olarak kopan bir node'a ısrarla yazmaya
+    // çalışırız. 15 sn, geçici drop'larda fazla node lookup yapmadan stale
+    // ID'den de kurtulan pratik bir denge.
+    private const val NODE_TTL_MS = 15_000L
+    private const val SEND_TIMEOUT_SEC = 10L
+    private const val NODE_TIMEOUT_SEC = 10L
 
     @Volatile private var cachedNodes: List<String> = emptyList()
     @Volatile private var cachedAt: Long = 0L
@@ -49,7 +55,7 @@ object WearableBridge {
             try {
                 Tasks.await(
                     client.sendMessage(nodeId, PATH_BPM, payload),
-                    5, TimeUnit.SECONDS,
+                    SEND_TIMEOUT_SEC, TimeUnit.SECONDS,
                 )
                 Log.d(TAG, "sent to node=$nodeId hr=$hr")
                 anyOk = true
@@ -71,7 +77,7 @@ object WearableBridge {
         return try {
             val nodes: List<Node> = Tasks.await(
                 Wearable.getNodeClient(ctx).connectedNodes,
-                5, TimeUnit.SECONDS,
+                NODE_TIMEOUT_SEC, TimeUnit.SECONDS,
             )
             val ids = nodes.map { it.id }
             Log.d(TAG, "connected nodes: ${nodes.joinToString { "${it.displayName}(${it.id}, nearby=${it.isNearby})" }}")

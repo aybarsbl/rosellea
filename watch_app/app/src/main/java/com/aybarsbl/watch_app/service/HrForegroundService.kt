@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
@@ -15,6 +16,7 @@ import com.aybarsbl.watch_app.R
 import com.aybarsbl.watch_app.data.AppState
 import com.aybarsbl.watch_app.health.HeartRateSource
 import com.aybarsbl.watch_app.network.WearableBridge
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -24,16 +26,24 @@ import kotlinx.coroutines.launch
 // üzerinde Health Services'a arkaplan erişim hakkı veriyor; sensor akışı ekran
 // kapalıyken bile kesilmiyor. BPM artık doğrudan HTTP ile gönderilmiyor —
 // WearableBridge üzerinden eşli telefona iletilir, telefon Pi'ye forward eder.
+//
+// Ek olarak partial wakelock alıyoruz: foreground service + battery exemption
+// CPU'nun derin uykuya dalmasını yine de tek başına garanti etmiyor;
+// PARTIAL_WAKE_LOCK olmadan coroutine `delay()` ve Wearable sendMessage
+// çağrıları doze altında geç tetikleniyor. Send döngüsünü Dispatchers.Default
+// üzerinde çalıştırıyoruz ki Main looper'a bağımlı olmasın.
 class HrForegroundService : LifecycleService() {
     companion object {
         private const val TAG = "HrForegroundService"
         private const val CHANNEL_ID = "rosellea_hr"
         private const val NOTIF_ID = 4711
         private const val SEND_INTERVAL_MS = 5_000L
+        private const val WAKELOCK_TAG = "Rosellea::HrWakelock"
     }
 
     private var hrJob: Job? = null
     private var sendJob: Job? = null
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
@@ -43,6 +53,7 @@ class HrForegroundService : LifecycleService() {
     override fun onCreate() {
         super.onCreate()
         ensureChannel()
+        acquireWakeLock()
         try {
             startForeground(
                 NOTIF_ID,
@@ -64,7 +75,7 @@ class HrForegroundService : LifecycleService() {
     }
 
     private fun startHrCollection() {
-        hrJob = lifecycleScope.launch {
+        hrJob = lifecycleScope.launch(Dispatchers.Default) {
             try {
                 HeartRateSource(this@HrForegroundService).flow().collect { sample ->
                     Log.v(TAG, "hr=${sample.bpm} acc=${sample.accuracy} avail=${sample.available}")
@@ -80,7 +91,7 @@ class HrForegroundService : LifecycleService() {
     }
 
     private fun startSending() {
-        sendJob = lifecycleScope.launch {
+        sendJob = lifecycleScope.launch(Dispatchers.Default) {
             while (isActive) {
                 delay(SEND_INTERVAL_MS)
                 val ok = runCatching {
@@ -104,8 +115,34 @@ class HrForegroundService : LifecycleService() {
     override fun onDestroy() {
         hrJob?.cancel(); hrJob = null
         sendJob?.cancel(); sendJob = null
+        releaseWakeLock()
         AppState.running.value = false
         super.onDestroy()
+    }
+
+    private fun acquireWakeLock() {
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+            wakeLock = wl
+            Log.d(TAG, "partial wakelock acquired")
+        } catch (e: Throwable) {
+            Log.w(TAG, "wakelock acquire failed", e)
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            wakeLock?.let { if (it.isHeld) it.release() }
+            Log.d(TAG, "partial wakelock released")
+        } catch (e: Throwable) {
+            Log.w(TAG, "wakelock release failed", e)
+        } finally {
+            wakeLock = null
+        }
     }
 
     private fun ensureChannel() {
