@@ -6,6 +6,7 @@ import androidx.health.services.client.ExerciseClient
 import androidx.health.services.client.ExerciseUpdateCallback
 import androidx.health.services.client.HealthServices
 import androidx.health.services.client.data.Availability
+import androidx.health.services.client.data.BatchingMode
 import androidx.health.services.client.data.DataType
 import androidx.health.services.client.data.DataTypeAvailability
 import androidx.health.services.client.data.ExerciseConfig
@@ -128,10 +129,17 @@ class HeartRateSource(private val context: Context) {
         callback: ExerciseUpdateCallback,
         executor: java.util.concurrent.Executor,
     ) {
+        // BatchingMode.HEART_RATE_5_SECONDS — kritik. Default davranışta
+        // Health Services ekran kapalıyken HR sample'larını ~30sn batch'liyor;
+        // patlama halinde 20-40 sample tek seferde geliyor. Bu override
+        // sistemi 5sn batch aralığına zorlar — fresh HR daha düzenli akar.
+        // Cihaz override'ı destekliyorsa devreye girer; desteklemiyorsa
+        // sessizce yok sayar (build hatası vermez).
         val config = ExerciseConfig.builder(ExerciseType.WORKOUT)
             .setDataTypes(setOf(DataType.HEART_RATE_BPM))
             .setIsAutoPauseAndResumeEnabled(false)
             .setIsGpsEnabled(false)
+            .setBatchingModeOverrides(setOf(BatchingMode.HEART_RATE_5_SECONDS))
             .build()
 
         val future = client.startExerciseAsync(config)

@@ -36,7 +36,9 @@ class HrForegroundService : LifecycleService() {
         private const val CHANNEL_ID = "rosellea_hr"
         private const val NOTIF_ID = 4711
         private const val SEND_INTERVAL_MS = 5_000L
-        private const val HR_STALE_AFTER_MS = 10_000L
+        // 15 sn: 5sn batch override + 5sn send cadence + 5sn pay. Daha
+        // küçük tutarsak Wear OS'un kısa drop'larında yanlış stale=true.
+        private const val HR_STALE_AFTER_MS = 15_000L
         private const val WAKELOCK_TAG = "Rosellea::HrWakelock"
     }
 
@@ -106,8 +108,12 @@ class HrForegroundService : LifecycleService() {
                 val now = System.currentTimeMillis()
                 val lastHrAt = AppState.lastHrUpdateAt.value
                 val stale = lastHrAt == 0L || (now - lastHrAt) > HR_STALE_AFTER_MS
-                val effectiveBpm = if (stale) 0 else AppState.hrBpm.value
-                val effectiveOnWrist = if (stale) false else AppState.onWrist.value
+                // Stale durumda 0 göndermek yerine son bilinen değeri
+                // gönderiyoruz; telefon/Pi `stale=true` bayrağına bakıp
+                // "85 (16sn önce)" gibi göstersin diye. 0 göndermek telefon
+                // UI'da değer kayboluyor izlenimi yaratıyor.
+                val effectiveBpm = AppState.hrBpm.value
+                val effectiveOnWrist = AppState.onWrist.value && !stale
 
                 val ok = runCatching {
                     WearableBridge.sendBpm(
@@ -124,9 +130,10 @@ class HrForegroundService : LifecycleService() {
                 }
                 AppState.lastSendAt.value = now
                 AppState.lastSendOk.value = ok
+                val ageSec = if (lastHrAt > 0L) (now - lastHrAt) / 1000 else -1L
                 Log.d(
                     TAG,
-                    "bridge hr=$effectiveBpm stale=$stale state=${AppState.exerciseState.value} ok=$ok",
+                    "bridge hr=$effectiveBpm stale=$stale age=${ageSec}s state=${AppState.exerciseState.value} ok=$ok",
                 )
             }
         }
