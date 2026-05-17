@@ -1,0 +1,9 @@
+{
+  "name": "expo-watch-bridge",
+  "version": "0.1.0",
+  "description": "Wear OS köprüsü: paired saatten Wearable Data Layer üzerinden BPM mesajları alır, online Rosellea Pi'lerine HTTP POST ile forward eder.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "private": true,
+  "keywords": ["react-native", "expo", "wearable"]
+}

@@ -6,11 +6,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 // `object` + StateFlow yeterli. HrForegroundService bunlara yazar, Compose
 // ekranları collectAsStateWithLifecycle ile dinler.
 object AppState {
-    val selectedPi = MutableStateFlow<PiDevice?>(null)
     val hrBpm = MutableStateFlow(0)
     val onWrist = MutableStateFlow(false)
     val accuracy = MutableStateFlow("UNKNOWN")
     val running = MutableStateFlow(false)
-    val lastPostAt = MutableStateFlow(0L)
-    val lastPostOk = MutableStateFlow(true)
+    val lastSendAt = MutableStateFlow(0L)
+    val lastSendOk = MutableStateFlow(true)
 }

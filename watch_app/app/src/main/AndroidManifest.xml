@@ -9,13 +9,15 @@
         kalmadığı için (minSdk=36) BODY_SENSORS'u tamamen kaldırıyoruz.
     -->
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <!--
+        One UI Watch'un "Sleeping apps" listesi foreground service bile olsa
+        uzun süre CPU/sensor tutan uygulamayı uyutabiliyor. Bu izin kullanıcıdan
+        battery optimization muafiyeti istemek için zorunlu.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <uses-feature android:name="android.hardware.type.watch" />
     <uses-feature
@@ -27,7 +29,6 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.DeviceDefault">
         <uses-library
             android:name="com.google.android.wearable"
@@ -37,8 +38,9 @@
             android:required="false" />
 
         <!--
-               Set to true if your app is Standalone, that is, it does not require the handheld
-               app to run.
+               Standalone Wear OS uygulaması: companion telefon app'ine ihtiyaç
+               duymadan çalışır. BPM köprüsü Wearable Data Layer üzerinden eşli
+               telefondaki Rosellea app'ine gider, ona companion gerekmez.
         -->
         <meta-data
             android:name="com.google.android.wearable.standalone"

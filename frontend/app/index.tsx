@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Image,
@@ -12,42 +12,106 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { scanRosellea } from "../lib/discovery";
 import { listRobots, Robot, updateRobotHost } from "../lib/storage";
+import { getHealth } from "../lib/api";
+import { ExpoWatchBridge } from "expo-watch-bridge";
+
+type Status = "ok" | "off" | "unknown";
+
+const HEALTH_TIMEOUT_MS = 2000;
+const REFRESH_INTERVAL_MS = 5000;
+
+async function checkHealth(host: string): Promise<boolean> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), HEALTH_TIMEOUT_MS);
+  try {
+    const res = await fetch(`http://${host}:8000/health`, {
+      signal: ctrl.signal,
+    });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export default function Index() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [robots, setRobots] = useState<Robot[]>([]);
+  const [status, setStatus] = useState<Record<string, Status>>({});
+  const robotsRef = useRef<Robot[]>([]);
+  robotsRef.current = robots;
+
+  const refreshHealth = useCallback(async () => {
+    const list = robotsRef.current;
+    if (list.length === 0) return;
+    const results = await Promise.all(
+      list.map(async (r) => [r.id, r.host, await checkHealth(r.host)] as const),
+    );
+    const next: Record<string, Status> = {};
+    const online: string[] = [];
+    for (const [id, host, ok] of results) {
+      next[id] = ok ? "ok" : "off";
+      if (ok) online.push(host);
+    }
+    setStatus(next);
+    try {
+      await ExpoWatchBridge.setTargets(online, 8000);
+    } catch {
+      // native modül yoksa sessiz geç (web/iOS stub)
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
+      let interval: ReturnType<typeof setInterval> | null = null;
+
       const refresh = async () => {
         const list = await listRobots();
         if (cancelled) return;
         setRobots(list);
-        if (list.length === 0) return;
-        const services = await scanRosellea();
-        if (cancelled || services.length === 0) return;
-        const byName = new Map(services.map((s) => [s.name, s.host]));
-        let changed = false;
-        const updated = await Promise.all(
-          list.map(async (r) => {
-            const host = byName.get(r.name);
-            if (host && host !== r.host) {
-              await updateRobotHost(r.id, host);
-              changed = true;
-              return { ...r, host };
-            }
-            return r;
-          }),
-        );
-        if (!cancelled && changed) setRobots(updated);
+        // Bilinmeyen olarak başlat; sağlık taraması sonra dolduracak.
+        setStatus((prev) => {
+          const next: Record<string, Status> = {};
+          for (const r of list) next[r.id] = prev[r.id] ?? "unknown";
+          return next;
+        });
+
+        if (list.length > 0) {
+          // mDNS host güncellemesi (mevcut davranış)
+          const services = await scanRosellea();
+          if (!cancelled && services.length > 0) {
+            const byName = new Map(services.map((s) => [s.name, s.host]));
+            let changed = false;
+            const updated = await Promise.all(
+              list.map(async (r) => {
+                const host = byName.get(r.name);
+                if (host && host !== r.host) {
+                  await updateRobotHost(r.id, host);
+                  changed = true;
+                  return { ...r, host };
+                }
+                return r;
+              }),
+            );
+            if (!cancelled && changed) setRobots(updated);
+          }
+        }
+        if (!cancelled) await refreshHealth();
       };
+
       refresh();
+      interval = setInterval(() => {
+        if (!cancelled) refreshHealth();
+      }, REFRESH_INTERVAL_MS);
+
       return () => {
         cancelled = true;
+        if (interval) clearInterval(interval);
       };
-    }, []),
+    }, [refreshHealth]),
   );
 
   const filtered = useMemo(() => {
@@ -86,18 +150,37 @@ export default function Index() {
           <FlatList
             data={filtered}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.listItem,
-                  pressed && styles.listItemPressed,
-                ]}
-                onPress={() => router.push(`/robot/${item.id}`)}
-              >
-                <Text style={styles.listItemTitle}>{item.name}</Text>
-                <Text style={styles.listItemSubtitle}>{item.host}</Text>
-              </Pressable>
-            )}
+            renderItem={({ item }) => {
+              const s: Status = status[item.id] ?? "unknown";
+              const isOk = s === "ok";
+              return (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.listItem,
+                    pressed && isOk && styles.listItemPressed,
+                    !isOk && styles.listItemDisabled,
+                  ]}
+                  onPress={() => {
+                    if (!isOk) return;
+                    router.push(`/robot/${item.id}`);
+                  }}
+                  disabled={!isOk}
+                >
+                  <View style={styles.listItemText}>
+                    <Text style={styles.listItemTitle}>{item.name}</Text>
+                    <Text style={styles.listItemSubtitle}>{item.host}</Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.statusDot,
+                      s === "ok" && styles.statusDotOk,
+                      s === "off" && styles.statusDotOff,
+                      s === "unknown" && styles.statusDotUnknown,
+                    ]}
+                  />
+                </Pressable>
+              );
+            }}
             ItemSeparatorComponent={() => <View style={styles.separator} />}
             ListEmptyComponent={
               <View style={styles.empty}>
@@ -190,12 +273,22 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   listItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingVertical: 14,
     paddingHorizontal: 12,
     borderRadius: 10,
   },
+  listItemText: {
+    flex: 1,
+    paddingRight: 12,
+  },
   listItemPressed: {
     backgroundColor: "#0f172a",
+  },
+  listItemDisabled: {
+    opacity: 0.5,
   },
   listItemTitle: {
     color: "#ffffff",
@@ -206,6 +299,24 @@ const styles = StyleSheet.create({
     color: "#64748b",
     fontSize: 13,
     marginTop: 2,
+  },
+  statusDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  statusDotOk: {
+    backgroundColor: "#22c55e",
+    shadowColor: "#22c55e",
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  statusDotOff: {
+    backgroundColor: "#ef4444",
+  },
+  statusDotUnknown: {
+    backgroundColor: "#475569",
   },
   separator: {
     height: 1,
