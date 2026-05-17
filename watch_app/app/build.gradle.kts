@@ -28,7 +28,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.aybarsbl.watch_app"
+        // Wear OS Data Layer aynı applicationId'ye otomatik route eder; telefon
+        // applicationId'si "com.aybarsbl.frontend" — saatte de aynı applicationId
+        // olduğu için framework cross-device mesajları doğrudan teslim eder,
+        // capability advertisement gerekmez. Java namespace "com.aybarsbl.watch_app"
+        // ayrı kalıyor (kod paketi değişmedi, sadece app device-ID değişti).
+        applicationId = "com.aybarsbl.frontend"
         minSdk = 36
         targetSdk = 36
         versionCode = 1

@@ -1,16 +1,12 @@
 package expo.modules.watchbridge
 
 import android.content.Context
-import android.util.Log
-import com.google.android.gms.wearable.Wearable
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import org.json.JSONObject
 
 class ExpoWatchBridgeModule : Module() {
     companion object {
-        const val TAG = "ExpoWatchBridge"
-        const val CAPABILITY = "rosellea_phone"
         const val PREFS_NAME = "rosellea_bridge"
         const val KEY_TARGETS = "targets"
         const val KEY_PORT = "port"
@@ -47,23 +43,7 @@ class ExpoWatchBridgeModule : Module() {
         Name("ExpoWatchBridge")
         Events("onBpm")
 
-        OnCreate {
-            instance = this@ExpoWatchBridgeModule
-            // Capability'i runtime'da advertise et. wearable_capabilities.xml de
-            // var ama Expo prebuild/resource merging her zaman dahil etmeyebiliyor.
-            // Bu çağrı UID'ye bağlı, bir kez advertise edildi mi system tutuyor.
-            val ctx = appContext.reactContext
-            if (ctx != null) {
-                try {
-                    Wearable.getCapabilityClient(ctx)
-                        .addLocalCapability(CAPABILITY)
-                        .addOnSuccessListener { Log.i(TAG, "advertised capability $CAPABILITY") }
-                        .addOnFailureListener { Log.w(TAG, "advertise capability failed: ${it.message}") }
-                } catch (e: Throwable) {
-                    Log.w(TAG, "addLocalCapability threw: ${e.message}")
-                }
-            }
-        }
+        OnCreate { instance = this@ExpoWatchBridgeModule }
         OnDestroy { if (instance === this@ExpoWatchBridgeModule) instance = null }
 
         AsyncFunction("setTargets") { hosts: List<String>, port: Int ->
