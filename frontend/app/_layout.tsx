@@ -9,7 +9,10 @@ import {
   View,
 } from "react-native";
 import { subscribe } from "../lib/emergency";
-import { hydrateMonitoringContext } from "../lib/emergencyStore";
+import {
+  hydrateEmergencyCooldown,
+  hydrateMonitoringContext,
+} from "../lib/emergencyStore";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -34,9 +37,11 @@ export default function RootLayout() {
     // Cold-start sırasında AsyncStorage'tan acil durum context'ini (host,
     // contacts, sms şablonu) restore et — service bildirim ile uygulamayı
     // uyandırdığında modal context'siz açılmasın.
-    hydrateMonitoringContext().finally(() => {
-      SplashScreen.hideAsync().finally(() => setReady(true));
-    });
+    Promise.all([hydrateMonitoringContext(), hydrateEmergencyCooldown()]).finally(
+      () => {
+        SplashScreen.hideAsync().finally(() => setReady(true));
+      },
+    );
     requestNotificationPermission();
   }, []);
 

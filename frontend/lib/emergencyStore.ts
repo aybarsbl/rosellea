@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Contact } from "./envTypes";
 
 const PERSIST_KEY = "rosellea.emergency.context";
+const COOLDOWN_KEY = "rosellea.emergency.lastSentAt";
+const COOLDOWN_MS = 5 * 60 * 1000;
 
 // Acil durum modali, kullanıcının açık olduğu robot'a ait host'u ve son
 // alınmış env içerisindeki kişileri/şablonu bilmek zorunda. RobotDetail ekranı
@@ -71,4 +73,34 @@ export function subscribeContext(cb: Listener): () => void {
   return () => {
     listeners.delete(cb);
   };
+}
+
+// Acil durum cooldown — SMS göndermek backend taraftan da 5 dk gate'liyor, ama
+// modal yeniden açılıp `smsLaunchedRef` sıfırlandığında frontend de ikinci kez
+// fireSms() çağrısı yapmasın diye AsyncStorage'da kalıcı son gönderim
+// timestamp'i tutuyoruz.
+let lastEmergencySentAt = 0;
+
+export async function hydrateEmergencyCooldown(): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(COOLDOWN_KEY);
+    if (!raw) return;
+    const n = Number(raw);
+    if (Number.isFinite(n) && n > 0) lastEmergencySentAt = n;
+  } catch {
+    // ignore
+  }
+}
+
+export function isEmergencyOnCooldown(): boolean {
+  return Date.now() - lastEmergencySentAt < COOLDOWN_MS;
+}
+
+export async function markEmergencySent(): Promise<void> {
+  lastEmergencySentAt = Date.now();
+  try {
+    await AsyncStorage.setItem(COOLDOWN_KEY, String(lastEmergencySentAt));
+  } catch {
+    // ignore
+  }
 }

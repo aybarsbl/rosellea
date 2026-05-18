@@ -2,8 +2,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,12 +21,10 @@ import {
   getWifiScan,
   Health,
   HeartRateSnapshot,
-  postReset,
   postWifiConnect,
 } from "../../lib/api";
 import {
   getRobot,
-  removeRobot,
   Robot,
   updateRobotHost,
 } from "../../lib/storage";
@@ -237,35 +233,6 @@ export default function RobotDetail() {
     setReloadKey((k) => k + 1);
   };
 
-  const confirmRemove = () => {
-    if (!robot) return;
-    const performRemove = async () => {
-      // Backend fabrika ayarlarına dönsün ve süreç kendini yeniden başlatsın.
-      // Robot offline olabilir → hata fırsatı yakala ama yerel silmeyi engelleme.
-      try {
-        await postReset(robot.host);
-      } catch (e: any) {
-        setError(
-          e?.message ??
-            "Robota bağlanılamadı, sıfırlama yapılamadı. Yine de listeden kaldırılıyor.",
-        );
-      }
-      await removeRobot(robot.id);
-      router.replace("/");
-    };
-    const message = `"${robot.name}" silinecek. Robot fabrika ayarlarına dönecek ve yeniden başlatılacak. Devam edilsin mi?`;
-    if (Platform.OS === "web") {
-      if (typeof window !== "undefined" && window.confirm(message)) {
-        performRemove();
-      }
-      return;
-    }
-    Alert.alert("Robotu Sil", message, [
-      { text: "Vazgeç", style: "cancel" },
-      { text: "Sil", style: "destructive", onPress: performRemove },
-    ]);
-  };
-
   if (loading) {
     return (
       <SafeAreaView style={styles.container} edges={["bottom"]}>
@@ -421,16 +388,6 @@ export default function RobotDetail() {
           onSaved={handleSaved}
           restartAfterSave
         />
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.danger,
-            pressed && styles.dangerPressed,
-          ]}
-          onPress={confirmRemove}
-        >
-          <Text style={styles.dangerText}>Robotu Sil</Text>
-        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -483,13 +440,4 @@ const styles = StyleSheet.create({
   },
   wifiTogglePressed: { backgroundColor: "#172033" },
   wifiToggleText: { color: "#cbd5e1", fontSize: 14, fontWeight: "500" },
-  danger: {
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#7f1d1d",
-  },
-  dangerPressed: { backgroundColor: "#1e0808" },
-  dangerText: { color: "#fca5a5", fontSize: 15, fontWeight: "600" },
 });

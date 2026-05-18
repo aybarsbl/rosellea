@@ -17,11 +17,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -117,16 +121,19 @@ fun MeasureScreen() {
         label = "heartPulse",
     )
 
+    val scrollState = rememberScrollState()
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(RoselleaBgDeep)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 28.dp, vertical = 24.dp),
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(scrollState),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -207,6 +214,9 @@ fun MeasureScreen() {
                     fontWeight = FontWeight.SemiBold,
                 )
             }
+
+            // Yuvarlak ekran alt kenarında butonun kesilmemesi için ek boşluk.
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }

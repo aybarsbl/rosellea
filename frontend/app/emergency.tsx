@@ -18,6 +18,8 @@ import {
 } from "../lib/emergency";
 import {
   getMonitoringContext,
+  isEmergencyOnCooldown,
+  markEmergencySent,
   pickSmsTemplate,
   subscribeContext,
 } from "../lib/emergencyStore";
@@ -161,6 +163,13 @@ export default function EmergencyScreen() {
     if (phase !== "fired") return;
     if (smsLaunchedRef.current) return;
     smsLaunchedRef.current = true;
+    // Modal yeniden açılırsa smsLaunchedRef sıfırlanır; kalıcı 5 dk guard.
+    if (isEmergencyOnCooldown()) {
+      setPhase("sent");
+      setInfo("Acil durum az önce gönderildi, 5 dakika içinde tekrar gönderilmedi.");
+      setTimeout(() => router.back(), 3000);
+      return;
+    }
     const host = ctx.host;
     if (!host) {
       setPhase("error");
@@ -173,6 +182,7 @@ export default function EmergencyScreen() {
       .then((count) => {
         setSentCount(count);
         if (count > 0) {
+          void markEmergencySent();
           setPhase("sent");
           setInfo(`${count} kişiye SMS gönderildi.`);
           setTimeout(() => router.back(), 4000);

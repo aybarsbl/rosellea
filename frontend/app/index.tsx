@@ -1,8 +1,10 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   FlatList,
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -11,8 +13,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { scanRosellea } from "../lib/discovery";
-import { listRobots, Robot, updateRobotHost } from "../lib/storage";
-import { getHealth } from "../lib/api";
+import { listRobots, removeRobot, Robot, updateRobotHost } from "../lib/storage";
+import { getHealth, postReset } from "../lib/api";
 import { ExpoWatchBridge } from "expo-watch-bridge";
 
 type Status = "ok" | "off" | "unknown";
@@ -114,6 +116,30 @@ export default function Index() {
     }, [refreshHealth]),
   );
 
+  const handleLongPressDelete = useCallback((robot: Robot) => {
+    const message = `"${robot.name}" silinecek. Robot çevrimiçiyse fabrika ayarlarına dönecek; çevrimdışıysa yalnızca listeden kaldırılır. Devam edilsin mi?`;
+    const performDelete = async () => {
+      try {
+        await postReset(robot.host);
+      } catch {
+        // Çevrimdışı robot — fabrika resetini atla, yine de listeden çıkar.
+      }
+      await removeRobot(robot.id);
+      const fresh = await listRobots();
+      setRobots(fresh);
+    };
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined" && window.confirm(message)) {
+        performDelete();
+      }
+      return;
+    }
+    Alert.alert("Robotu Sil", message, [
+      { text: "İptal", style: "cancel" },
+      { text: "Sil", style: "destructive", onPress: performDelete },
+    ]);
+  }, []);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return robots;
@@ -164,7 +190,8 @@ export default function Index() {
                     if (!isOk) return;
                     router.push(`/robot/${item.id}`);
                   }}
-                  disabled={!isOk}
+                  onLongPress={() => handleLongPressDelete(item)}
+                  delayLongPress={500}
                 >
                   <View style={styles.listItemText}>
                     <Text style={styles.listItemTitle}>{item.name}</Text>

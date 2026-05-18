@@ -24,12 +24,14 @@ class EmergencyManager:
         env: env_mod.Environment,
         messages: Optional[database.Messages] = None,
         countdown_s: int = 10,
+        cooldown_s: int = 300,
     ):
         self._speaker = speaker
         self._mic = mic
         self._env = env
         self._messages = messages
         self._countdown_s = max(1, int(countdown_s))
+        self._cooldown_s = max(0, int(cooldown_s))
 
         self._lock = threading.Lock()
         self._state: str = self.STATE_IDLE
@@ -38,6 +40,7 @@ class EmergencyManager:
         self._started_at: float = 0.0
         self._fired_at: float = 0.0
         self._sent_count: int = 0
+        self._cooldown_until: float = 0.0
         self._timer: Optional[threading.Timer] = None
         self._announce_thread: Optional[threading.Thread] = None
 
@@ -62,12 +65,17 @@ class EmergencyManager:
                 "started_at": self._started_at,
                 "fired_at": self._fired_at,
                 "countdown_s": self._countdown_s,
+                "cooldown_s": self._cooldown_s,
+                "cooldown_until": self._cooldown_until,
                 "sent_count": self._sent_count,
             }
 
     def trigger(self, raw_value: int, source: str = "smoke"):
         with self._lock:
             if self._state in (self.STATE_ARMED, self.STATE_FIRED):
+                return
+            if self._cooldown_s > 0 and time.time() < self._cooldown_until:
+                self._log("[Acil Durum] Soğuma süresi aktif, tetikleme yok sayıldı.")
                 return
             self._state = self.STATE_ARMED
             self._raw = int(raw_value)
@@ -183,12 +191,16 @@ class EmergencyManager:
                 return False
             self._state = self.STATE_SENT
             self._sent_count = max(self._sent_count, int(count))
+            self._cooldown_until = time.time() + self._cooldown_s
+            cooldown_until = self._cooldown_until
 
         self._log(f"[Acil Durum] {count} kişiye SMS gönderildi.")
         self._publish({
             "type": "emergency.sent",
             "count": count,
             "at": time.time(),
+            "cooldown_until": cooldown_until,
+            "cooldown_s": self._cooldown_s,
         })
         # SMS gönderildikten sonra otomatik temizleme — kullanıcı/teknisyen
         # tekrar manuel kontrol etmek isteyebilir, biraz daha bekleyelim.
