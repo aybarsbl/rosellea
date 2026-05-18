@@ -126,7 +126,7 @@ Cam = camera.Camera(start=False)
 Mic = microphone.Microphone(
     gpt=GPT,
     model_id=whisper_model,
-    silence_thold=0.5,
+    silence_thold=0.7,
     sound_thold=300,
     event=is_active,
     name=SystemPrompt.get_assistant_name(),
@@ -156,7 +156,7 @@ Speaker = speaker.Speaker(
     output_format=elabs_output,
     pause_event=mic_pause,
     volume=speaker_volume,
-    duration=300,
+    duration=0,
 )
 Messages = database.Messages(url=DATABASE, speaker=Speaker, restart=True)
 Emergency = emergency.EmergencyManager(

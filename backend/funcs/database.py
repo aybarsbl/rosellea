@@ -15,6 +15,8 @@ class Messages:
         connect: bool = True,
         restart: bool = False,
     ):
+        self.print_once = 0
+
         self._url = url
         self._speaker = speaker
         self.is_success = False
@@ -101,8 +103,11 @@ class Messages:
         if print_all:
             # Tüm geçmişi yeniden yazdırmak yerine sadece bu mesajı bas —
             # uzun konuşmalarda terminal spam'ini önler.
-            role_label = f"[{role.title()}]"
-            print(f"{role_label.ljust(11)} : {content.strip()}")
+            if role != "system" or self.print_once == 0:
+                role_label = f"[{role.title()}]"
+                print(f"{role_label.ljust(11)} : {content.strip()}")
+                if role == "system":
+                    self.print_once = -1
         if role == "assistant" and speak:
             self._speaker.speak(content.strip())
 
