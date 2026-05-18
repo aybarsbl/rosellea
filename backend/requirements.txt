@@ -8,6 +8,8 @@ mediapipe
 numpy<2
 
 SpeechRecognition
+silero-vad>=5.1
+onnxruntime
 
 pyaudio
 

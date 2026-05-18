@@ -40,8 +40,9 @@ DEFAULT_ENV = {
             "high": "mp3_44100_192",
             "normal": "mp3_44100_128",
             "low": "mp3_22050_32",
+            "streaming": "pcm_22050",
         },
-        "output": "mp3_44100_128",
+        "output": "pcm_22050",
         "voices": {
             "aybars": "rs0m5Uct3s3z8gsNG6S5",
             "mia": "PdYVUd1CAGSXsTvZZTNn",
@@ -54,7 +55,12 @@ DEFAULT_ENV = {
             "medium": "gpt-4o-mini-transcribe",
             "small": "whisper-1",
         },
-        "model": "gpt-4o-transcribe",
+        "model": "gpt-4o-mini-transcribe",
+    },
+    "vad": {
+        "speech_ratio_min": 0.35,
+        "speech_ms_min": 250,
+        "prob_threshold": 0.5,
     },
     "mediapipe": {
         "folder": "data/tasks/",

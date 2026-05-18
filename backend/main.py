@@ -83,7 +83,16 @@ elabs_voice = _env.get("elabs.voice")
 # -------------------
 # WHISPER (OpenAI online transcription)
 # -------------------
-whisper_model = _env.get("whisper.model") or "gpt-4o-transcribe"
+whisper_model = _env.get("whisper.model") or "gpt-4o-mini-transcribe"
+
+
+# -------------------
+# VAD (Silero, halüsinasyon önleme)
+# -------------------
+vad_cfg = _env.get("vad") or {}
+vad_speech_ratio_min = vad_cfg.get("speech_ratio_min", 0.35)
+vad_speech_ms_min = vad_cfg.get("speech_ms_min", 250)
+vad_prob_threshold = vad_cfg.get("prob_threshold", 0.5)
 
 
 # -------------------
@@ -117,13 +126,16 @@ Cam = camera.Camera(start=False)
 Mic = microphone.Microphone(
     gpt=GPT,
     model_id=whisper_model,
-    silence_thold=0.6,
+    silence_thold=0.5,
     sound_thold=300,
     event=is_active,
     name=SystemPrompt.get_assistant_name(),
     start=False,
     pause_event=mic_pause,
     gain=mic_gain,
+    speech_ratio_min=vad_speech_ratio_min,
+    speech_ms_min=vad_speech_ms_min,
+    prob_threshold=vad_prob_threshold,
 )
 MediapipeTasks = human.Tasks(
     download_path=os.path.join(base_path, mediapipe_tasks),
@@ -144,7 +156,7 @@ Speaker = speaker.Speaker(
     output_format=elabs_output,
     pause_event=mic_pause,
     volume=speaker_volume,
-    duration=800,
+    duration=300,
 )
 Messages = database.Messages(url=DATABASE, speaker=Speaker, restart=True)
 Emergency = emergency.EmergencyManager(
@@ -283,8 +295,22 @@ def start():
                     is_active.clear()
                     break
 
-                answer = AI.chat(messages=Messages.select_all())
-                Messages.insert("assistant", answer)
+                t_resp = time.perf_counter()
+                Speaker.begin()
+                answer = AI.chat(
+                    messages=Messages.select_all(),
+                    on_sentence=Speaker.feed,
+                )
+                Speaker.end()
+                print(
+                    f"[perf] total_response_ms="
+                    f"{(time.perf_counter()-t_resp)*1000:.0f} "
+                    f"streamed={Speaker.streamed}"
+                )
+                # Streaming akışta cümleler zaten konuşuldu — DB log only.
+                # Tool path'inde Speaker.streamed=False, eski non-stream
+                # Speaker.speak fallback'i Messages.insert içinden çalışır.
+                Messages.insert("assistant", answer, speak=not Speaker.streamed)
 
     stop()
 

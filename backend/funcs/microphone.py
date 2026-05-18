@@ -3,6 +3,7 @@ import time
 import subprocess
 import io
 import wave
+from time import perf_counter
 from typing import Callable, Optional
 import numpy as np
 import pyaudio
@@ -18,6 +19,8 @@ NATIVE_CHANNELS = 2
 TARGET_RATE = 16000
 RESAMPLE_RATIO = NATIVE_RATE // TARGET_RATE  # 3
 FRAMES_PER_BUFFER = 3072  # ~64 ms @ 48 kHz, downmix sonrası 1024 @ 16 kHz
+# Silero VAD v5 sabit pencere boyutu @ 16 kHz: 512 sample (32 ms).
+VAD_WINDOW = 512
 
 
 class Microphone:
@@ -32,6 +35,9 @@ class Microphone:
         start: bool = False,
         pause_event: threading.Event | None = None,
         gain: int = 75,
+        speech_ratio_min: float = 0.35,
+        speech_ms_min: int = 250,
+        prob_threshold: float = 0.5,
     ):
         self._gpt = gpt
         self._model_id = model_id
@@ -44,8 +50,18 @@ class Microphone:
         self._pause_event = pause_event
         self._gain = gain
 
+        # VAD eşikleri — utterance bittiğinde STT'ye gönderip göndermemeyi
+        # belirler. Kapı tıkırtısı/alkış gibi yüksek-RMS-düşük-konuşma
+        # sesleri buradan elenir, OpenAI'ye hiç gitmez.
+        self._speech_ratio_min = speech_ratio_min
+        self._speech_ms_min = speech_ms_min
+        self._prob_threshold = prob_threshold
+
         self._pyaudio = None
         self._mic = None
+        # Silero VAD modeli ve callable wrapper'ı `start()` içinde lazy
+        # yüklenir — import sırasında onnxruntime'ı zorlamasın.
+        self._vad_model = None
 
         self._thread = threads.Thread(name="Microphone", loop_func=self._loop)
         self._text: str = ""
@@ -79,22 +95,39 @@ class Microphone:
         # int16 → int32 ile topla, böl: overflow yok
         return (stereo.astype(np.int32).sum(axis=1) // NATIVE_CHANNELS).astype(np.int16)
 
+    def _decimate(self, data: bytes) -> np.ndarray:
+        """48 kHz stereo bytes → 16 kHz mono int16 array (1024 sample/chunk)."""
+        mono48 = self._stereo_to_mono(data)
+        if mono48.size == 0:
+            return mono48
+        if mono48.size % RESAMPLE_RATIO:
+            mono48 = mono48[: -(mono48.size % RESAMPLE_RATIO)]
+        grouped = mono48.astype(np.int32).reshape(-1, RESAMPLE_RATIO)
+        return (grouped.sum(axis=1) // RESAMPLE_RATIO).astype(np.int16)
+
     def _rms_calc(self, data: bytes) -> float:
         mono = self._stereo_to_mono(data)
         if mono.size == 0:
             return 0.0
         return float(np.sqrt(np.mean(mono.astype(np.float64) ** 2)))
 
-    def _get_audio(self, frames: list[bytes]) -> io.BytesIO:
-        # Tüm frame'leri birleştir, mono'ya indir, 48 kHz → 16 kHz decimate
-        raw = b"".join(frames)
-        mono48 = self._stereo_to_mono(raw)
-        # 3-örnek ortalama (basit anti-alias) sonra decimate → 16 kHz
-        if mono48.size % RESAMPLE_RATIO:
-            mono48 = mono48[: -(mono48.size % RESAMPLE_RATIO)]
-        grouped = mono48.astype(np.int32).reshape(-1, RESAMPLE_RATIO)
-        mono16 = (grouped.sum(axis=1) // RESAMPLE_RATIO).astype(np.int16)
+    def _vad_prob(self, window16: np.ndarray) -> float:
+        """Silero VAD'ten tek pencere için speech probability (0..1)."""
+        if self._vad_model is None or window16.size < VAD_WINDOW:
+            return 0.0
+        try:
+            import torch  # silero-vad torch tensor bekler
 
+            sample = torch.from_numpy(
+                window16[:VAD_WINDOW].astype(np.float32) / 32768.0
+            )
+            with torch.no_grad():
+                return float(self._vad_model(sample, TARGET_RATE).item())
+        except Exception:
+            return 0.0
+
+    def _get_audio_from_mono16(self, mono16: np.ndarray) -> io.BytesIO:
+        """Birikmiş 16 kHz mono sample'ları WAV BytesIO'ya paketle."""
         buf = io.BytesIO()
         with wave.open(buf, "wb") as wf:
             wf.setnchannels(1)
@@ -109,8 +142,8 @@ class Microphone:
 
     def _transcribe(self, audio: io.BytesIO) -> str:
         # Halüsinasyonu minimize etmek için: language="tr", temperature=0
-        # ve prompt'ta Türkçe bağlam + asistan adı. Sessizlik zaten RMS
-        # eşiğiyle filtrelendiği için API'ye gerçek konuşma gidiyor.
+        # ve prompt'ta Türkçe bağlam + asistan adı. Konuşma içermeyen ses
+        # zaten VAD ile elendiği için API'ye gerçek konuşma gidiyor.
         # Latency için stream=True: token'lar geldikçe biriktir.
         transcribe_prompt = (
             f"Aşağıdaki ses Türkçe konuşmadır. "
@@ -150,11 +183,15 @@ class Microphone:
         # için kaç chunk gerek: NATIVE_RATE / FRAMES_PER_BUFFER ≈ 15.6
         chunks_per_second = NATIVE_RATE / FRAMES_PER_BUFFER
         while self._check():
-            frames = []
+            mono_frames: list[np.ndarray] = []
+            vad_probs: list[float] = []
             count = 0
             silence_limit = int(self._silence_thold * chunks_per_second)
             started = False
+            t_start: float = 0.0
 
+            # Konuşma başlangıcı: RMS hızlı bail. Decimate veya VAD yok —
+            # ucuz olsun, kullanıcı konuşmaya başlamamışken işlem yapma.
             while True:
                 if not self._check():
                     return
@@ -166,15 +203,26 @@ class Microphone:
                     continue
                 if self._rms_calc(data) >= self._sound_thold:
                     started = True
-                    frames.append(data)
+                    t_start = perf_counter()
+                    mono16 = self._decimate(data)
+                    mono_frames.append(mono16)
+                    # İlk frame'in VAD prob'unu da topla.
+                    for off in range(0, mono16.size - VAD_WINDOW + 1, VAD_WINDOW):
+                        vad_probs.append(self._vad_prob(mono16[off:off + VAD_WINDOW]))
                     break
 
+            # Konuşma bitişi: RMS sessizlik sayacı + paralel olarak VAD
+            # prob biriktir. Frame-level VAD inference Pi 5'te ~0.5 ms,
+            # toplam utterance için ihmal edilebilir.
             while True:
                 if not self._check():
                     return
 
                 data = self._mic.read(FRAMES_PER_BUFFER, exception_on_overflow=False)
-                frames.append(data)
+                mono16 = self._decimate(data)
+                mono_frames.append(mono16)
+                for off in range(0, mono16.size - VAD_WINDOW + 1, VAD_WINDOW):
+                    vad_probs.append(self._vad_prob(mono16[off:off + VAD_WINDOW]))
                 rms = self._rms_calc(data)
 
                 if rms < self._sound_thold:
@@ -185,11 +233,42 @@ class Microphone:
                 if count >= silence_limit:
                     break
 
-            if not started or len(frames) < 5 or not self._check():
+            if not started or len(mono_frames) < 5 or not self._check():
                 continue
 
-            audio = self._get_audio(frames)
+            # VAD kapısı: konuşma olmayan ses (kapı tıkırtısı, alkış vs.)
+            # OpenAI'ye gönderilmesin. Halüsinasyon kaynağı bu noktadan
+            # önce kesilir.
+            if vad_probs:
+                speech_frames = sum(1 for p in vad_probs if p >= self._prob_threshold)
+                speech_ratio = speech_frames / len(vad_probs)
+                speech_ms = speech_frames * 32
+            else:
+                speech_ratio = 0.0
+                speech_ms = 0
+
+            mic_capture_ms = (perf_counter() - t_start) * 1000
+
+            # VAD modeli yüklenemediyse kapı bypass — eski RMS-only davranışı
+            # devreye girer ki STT tamamen kopmasın.
+            if self._vad_model is not None and (
+                speech_ratio < self._speech_ratio_min
+                or speech_ms < self._speech_ms_min
+            ):
+                print(
+                    f"[perf] vad_drop ratio={speech_ratio:.2f} "
+                    f"speech_ms={speech_ms} capture_ms={mic_capture_ms:.0f}"
+                )
+                continue
+
+            audio = self._get_audio_from_mono16(np.concatenate(mono_frames))
+            t_stt = perf_counter()
             text = self._transcribe(audio)
+            stt_ms = (perf_counter() - t_stt) * 1000
+            print(
+                f"[perf] mic_capture_ms={mic_capture_ms:.0f} "
+                f"vad_speech_ratio={speech_ratio:.2f} stt_ms={stt_ms:.0f}"
+            )
 
             with self._thread.lock:
                 if text:
@@ -276,8 +355,21 @@ class Microphone:
         except Exception:
             pass
 
+    def _load_vad(self):
+        """Silero VAD modelini yükle. Önce pip paketinden (load_silero_vad),
+        olmadıysa onnxruntime ile manuel — her iki yol da CPU'da ~0.5 ms."""
+        try:
+            from silero_vad import load_silero_vad
+
+            self._vad_model = load_silero_vad(onnx=True)
+            print("[Microphone] Silero VAD yüklendi (onnx)")
+        except Exception as e:
+            print(f"[Microphone] Silero VAD yüklenemedi: {e} — VAD bypass")
+            self._vad_model = None
+
     def start(self):
         self._set_mic_gain()
+        self._load_vad()
 
         self._pyaudio = pyaudio.PyAudio()
         self._mic = self._pyaudio.open(
