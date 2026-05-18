@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Adaptive icon foreground. 108dp canvas, 66dp safe zone (merkezde).
+    21dp inset 66dp'lik içerik alanı bırakır; bitmap "fill" gravity ile bu
+    alana ölçeklenir. Kaynak 1024x1024 kare olduğu için en-boy bozulmaz.
+-->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:insetLeft="18dp"
-    android:insetTop="18dp"
-    android:insetRight="18dp"
-    android:insetBottom="18dp">
+    android:insetLeft="21dp"
+    android:insetTop="21dp"
+    android:insetRight="21dp"
+    android:insetBottom="21dp">
     <bitmap
         android:src="@drawable/rosellea_logo"
-        android:gravity="center"
+        android:gravity="fill"
         android:tileMode="disabled" />
 </inset>
