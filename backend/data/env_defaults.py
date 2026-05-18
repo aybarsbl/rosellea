@@ -45,7 +45,7 @@ DEFAULT_ENV = {
         "output": "pcm_22050",
         "voices": {
             "Mia": "PdYVUd1CAGSXsTvZZTNn",
-            "Kaya": "Vv1QW9Yx3WB2mLKFmyZG",
+            "Fatih": "7VqWGAWwo2HMrylfKrcm",
             "Aybars": "Vtkz15gE7FWxaauqWMuM",
             "Aybars (Pro)": "rs0m5Uct3s3z8gsNG6S5",
         },
