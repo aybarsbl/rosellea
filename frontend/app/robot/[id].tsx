@@ -51,6 +51,7 @@ const ALL_FIELDS: FieldKey[] = [
   "hrSuddenChangeWindowS",
   "hrSmsTemplate",
   "assistantModel",
+  "whisperModel",
   "elabsModel",
   "elabsOutput",
   "elabsVoice",

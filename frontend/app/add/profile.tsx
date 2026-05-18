@@ -22,6 +22,7 @@ const ALL_FIELDS: FieldKey[] = [
   "health_notes",
   "contacts",
   "assistantModel",
+  "whisperModel",
   "elabsModel",
   "elabsOutput",
   "elabsVoice",

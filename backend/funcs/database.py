@@ -99,7 +99,10 @@ class Messages:
             conn.commit()
 
         if print_all:
-            self.printer()
+            # Tüm geçmişi yeniden yazdırmak yerine sadece bu mesajı bas —
+            # uzun konuşmalarda terminal spam'ini önler.
+            role_label = f"[{role.title()}]"
+            print(f"{role_label.ljust(11)} : {content.strip()}")
         if role == "assistant" and speak:
             self._speaker.speak(content.strip())
 

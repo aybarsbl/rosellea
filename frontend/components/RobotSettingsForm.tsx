@@ -28,6 +28,7 @@ export type FieldKey =
   | "health_notes"
   | "contacts"
   | "assistantModel"
+  | "whisperModel"
   | "elabsModel"
   | "elabsOutput"
   | "elabsVoice"
@@ -111,6 +112,7 @@ export function RobotSettingsForm({
   const initialNotes = useMemo(() => asStringArray(getByPath(initial, "user.health_notes")), [initial]);
   const initialContacts = useMemo(() => asContactArray(getByPath(initial, "user.contacts")), [initial]);
   const initialAssistantModel = useMemo(() => asString(getByPath(initial, "assistant.model")), [initial]);
+  const initialWhisperModel = useMemo(() => asString(getByPath(initial, "whisper.model")), [initial]);
   const initialElabsModel = useMemo(() => asString(getByPath(initial, "elabs.model")), [initial]);
   const initialElabsOutput = useMemo(() => asString(getByPath(initial, "elabs.output")), [initial]);
   const initialElabsVoice = useMemo(() => asString(getByPath(initial, "elabs.voice")), [initial]);
@@ -178,6 +180,7 @@ export function RobotSettingsForm({
   );
 
   const assistantModelOptions = useMemo(() => asOptions(getByPath(initial, "openai.models")), [initial]);
+  const whisperModelOptions = useMemo(() => asOptions(getByPath(initial, "whisper.models")), [initial]);
   const elabsModelOptions = useMemo(() => asOptions(getByPath(initial, "elabs.models")), [initial]);
   const elabsOutputOptions = useMemo(() => asOptions(getByPath(initial, "elabs.outputs")), [initial]);
   const elabsVoiceOptions = useMemo(() => asOptions(getByPath(initial, "elabs.voices")), [initial]);
@@ -189,6 +192,7 @@ export function RobotSettingsForm({
   const [healthNotes, setHealthNotes] = useState(initialNotes.join(", "));
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
   const [assistantModel, setAssistantModel] = useState(initialAssistantModel);
+  const [whisperModel, setWhisperModel] = useState(initialWhisperModel);
   const [elabsModel, setElabsModel] = useState(initialElabsModel);
   const [elabsOutput, setElabsOutput] = useState(initialElabsOutput);
   const [elabsVoice, setElabsVoice] = useState(initialElabsVoice);
@@ -267,6 +271,9 @@ export function RobotSettingsForm({
     }
     if (has("assistantModel") && assistantModel && assistantModel !== initialAssistantModel) {
       patches.push({ key: "assistant.model", value: assistantModel });
+    }
+    if (has("whisperModel") && whisperModel && whisperModel !== initialWhisperModel) {
+      patches.push({ key: "whisper.model", value: whisperModel });
     }
     if (has("elabsModel") && elabsModel && elabsModel !== initialElabsModel) {
       patches.push({ key: "elabs.model", value: elabsModel });
@@ -477,6 +484,15 @@ export function RobotSettingsForm({
           options={assistantModelOptions}
           value={assistantModel}
           onChange={setAssistantModel}
+        />
+      )}
+
+      {has("whisperModel") && (
+        <Dropdown
+          label="Dinleme Modeli"
+          options={whisperModelOptions}
+          value={whisperModel}
+          onChange={setWhisperModel}
         />
       )}
 

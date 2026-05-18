@@ -51,11 +51,11 @@ DEFAULT_ENV = {
     },
     "whisper": {
         "models": {
-            "large": "gpt-4o-transcribe",
-            "medium": "gpt-4o-mini-transcribe",
-            "small": "whisper-1",
+            "high": "gpt-4o-transcribe",
+            "normal": "gpt-4o-mini-transcribe",
+            "low": "whisper-1",
         },
-        "model": "gpt-4o-mini-transcribe",
+        "model": "gpt-4o-transcribe",
     },
     "vad": {
         "speech_ratio_min": 0.35,
