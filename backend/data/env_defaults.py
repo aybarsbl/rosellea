@@ -44,8 +44,10 @@ DEFAULT_ENV = {
         },
         "output": "pcm_22050",
         "voices": {
-            "aybars": "rs0m5Uct3s3z8gsNG6S5",
-            "mia": "PdYVUd1CAGSXsTvZZTNn",
+            "Mia": "PdYVUd1CAGSXsTvZZTNn",
+            "Kaya": "Vv1QW9Yx3WB2mLKFmyZG",
+            "Aybars": "Vtkz15gE7FWxaauqWMuM",
+            "Aybars (Pro)": "rs0m5Uct3s3z8gsNG6S5",
         },
         "voice": "PdYVUd1CAGSXsTvZZTNn",
     },
@@ -72,7 +74,7 @@ DEFAULT_ENV = {
     "safety": {
         "smoke": {
             "enabled": True,
-            "threshold": 18000,
+            "threshold": 5000,
             "debounce_samples": 3,
             "poll_hz": 5.0,
             "i2c_address": 72,
