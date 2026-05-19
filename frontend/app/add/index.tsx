@@ -12,6 +12,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { DiscoveredDevice, provisioner } from "../../lib/ble";
 import { resetSession, setDevice } from "../../lib/session";
 
+// BLE adapter kapalı / izin yok / generic hata — hepsini tek anlaşılır mesaja eşle.
+function mapBleError(raw: string | undefined): string {
+  const msg = raw ?? "";
+  if (/bluetooth|ble|powered|permission|izin/i.test(msg)) {
+    return "Bluetooth Bağlantısını etkin hale getirmeniz gerekiyor.";
+  }
+  return msg || "Bağlanılamadı.";
+}
+
 export default function AddScan() {
   const router = useRouter();
   const [scanning, setScanning] = useState(true);
@@ -29,7 +38,7 @@ export default function AddScan() {
         if (!cancelled) setDevices(found);
       })
       .catch((e: Error) => {
-        if (!cancelled) setError(e.message);
+        if (!cancelled) setError(mapBleError(e?.message));
       })
       .finally(() => {
         if (!cancelled) setScanning(false);
@@ -46,7 +55,7 @@ export default function AddScan() {
       setDevice(device);
       router.push("/add/setup");
     } catch (e: any) {
-      setError(e?.message ?? "Bağlanılamadı.");
+      setError(mapBleError(e?.message));
     }
   };
 

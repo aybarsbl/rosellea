@@ -102,7 +102,8 @@ class RealBleProvisioner implements BleProvisioner {
     const allGranted = perms.every(
       (p) => granted[p] === PermissionsAndroid.RESULTS.GRANTED,
     );
-    if (!allGranted) throw new Error("Bluetooth izinleri reddedildi.");
+    if (!allGranted)
+      throw new Error("Bluetooth Bağlantısını etkin hale getirmeniz gerekiyor.");
   }
 
   async scan(timeoutMs = 5000): Promise<DiscoveredDevice[]> {

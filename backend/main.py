@@ -1,4 +1,5 @@
 import socket
+import sys
 import threading
 import time
 import cv2
@@ -76,7 +77,7 @@ llm_tools = _env.get("assistant.tools")
 # ELEVENLABS
 # -------------------
 elabs_model = _env.get("elabs.model")
-elabs_output = _env.get("elabs.output")
+elabs_output = "pcm_22050"  # streaming format sabit
 elabs_voice = _env.get("elabs.voice")
 
 
@@ -201,6 +202,7 @@ Discovery = discovery.Discovery(name=ROBOT_NAME, port=HTTP_PORT)
 Provisioning = provisioning.Provisioning(
     name=ROBOT_NAME,
     on_complete=lambda ip: print(f"[provisioning] connected, ip={ip}"),
+    env=_env,
 )
 
 
@@ -237,10 +239,28 @@ def start():
     Provisioning.on_complete = _on_provisioned
     Provisioning.start()
 
+    if not wifi.is_connected():
+        # Önce env.json'da kayıtlı credentials varsa onunla bağlanmayı dene.
+        stored_ssid = _env.get("wifi.ssid")
+        stored_pwd = _env.get("wifi.password")
+        if stored_ssid and stored_pwd:
+            print(f"[main] Stored Wi-Fi ile bağlanılıyor: {stored_ssid}")
+            wifi.connect(stored_ssid, stored_pwd)
+
     if wifi.is_connected():
         HttpServer.start()
         Discovery.start()
     else:
+        if _env.get("setup.completed"):
+            # Kullanıcı kurulum yapmış ama ağ kaybolmuş → temiz başlat.
+            # Reset edilen env.json'da setup.completed=False olacağı için
+            # bir sonraki açılışta loop'a girmez, BLE provisioning'i bekler.
+            print("[main] Wi-Fi yok ve setup tamamlanmış → env.json reset + respawn")
+            _env.reset(DEFAULT_ENV)
+            sys.stdout.flush()
+            sys.stderr.flush()
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+            return  # ulaşılmaz
         print("[main] Wi-Fi yok, BLE provisioning bekleniyor...")
         while not quit.is_set():
             if wifi.is_connected():

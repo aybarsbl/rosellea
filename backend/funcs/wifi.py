@@ -122,6 +122,41 @@ def current_ssid() -> str | None:
     return None
 
 
+def forget_others(keep_ssid: str) -> None:
+    """keep_ssid hariç tüm 802-11-wireless NM connection profillerini sil.
+    Tek-ağ politikası: telefondan provisioning ile gelen Wi-Fi dışındakileri
+    unut ki Pi sonradan eski/kaybolan ağa düşmesin."""
+    try:
+        res = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return
+    if res.returncode != 0:
+        return
+    for line in res.stdout.splitlines():
+        fields = _split_nmcli(line)
+        if len(fields) < 2:
+            continue
+        name, ctype = fields[0], fields[1]
+        if ctype != "802-11-wireless":
+            continue
+        if not name or name == keep_ssid:
+            continue
+        try:
+            subprocess.run(
+                ["nmcli", "connection", "delete", name],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+
+
 def safe_summary(ssid: str, password: str) -> str:
     """Loglara basmak için parolayı maskele."""
     masked = "*" * len(password) if password else ""

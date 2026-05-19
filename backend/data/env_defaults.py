@@ -2,6 +2,10 @@ DEFAULT_ENV = {
     "setup": {
         "completed": False,
     },
+    "wifi": {
+        "ssid": "",
+        "password": "",
+    },
     "user": {
         "name": "",
         "age": "",
@@ -24,38 +28,27 @@ DEFAULT_ENV = {
     },
     "openai": {
         "models": {
-            "large": "gpt-5.4",
-            "medium": "gpt-5.4-mini",
-            "small": "gpt-4o",
+            "kaliteli": "gpt-5.4",
+            "hızlı": "gpt-4o",
         },
     },
     "elabs": {
         "models": {
-            "large": "eleven_v3",
-            "medium": "eleven_multilingual_v2",
-            "small": "eleven_flash_v2_5",
+            "kaliteli": "eleven_multilingual_v2",
+            "hızlı": "eleven_flash_v2_5",
         },
         "model": "eleven_multilingual_v2",
-        "outputs": {
-            "high": "mp3_44100_192",
-            "normal": "mp3_44100_128",
-            "low": "mp3_22050_32",
-            "streaming": "pcm_22050",
-        },
-        "output": "pcm_22050",
         "voices": {
             "Mia": "PdYVUd1CAGSXsTvZZTNn",
             "Fatih": "7VqWGAWwo2HMrylfKrcm",
             "Aybars": "Vtkz15gE7FWxaauqWMuM",
-            "Aybars (Pro)": "rs0m5Uct3s3z8gsNG6S5",
         },
         "voice": "PdYVUd1CAGSXsTvZZTNn",
     },
     "whisper": {
         "models": {
-            "high": "gpt-4o-transcribe",
-            "normal": "gpt-4o-mini-transcribe",
-            "low": "whisper-1",
+            "kaliteli": "gpt-4o-transcribe",
+            "hızlı": "gpt-4o-mini-transcribe",
         },
         "model": "gpt-4o-transcribe",
     },

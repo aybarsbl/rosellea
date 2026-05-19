@@ -38,9 +38,15 @@ class Provisioning:
       - SCAN: write/read/notify  write -> tarama tetikler, sonuç JSON dizi
     """
 
-    def __init__(self, name: str, on_complete: Callable[[str], None] | None = None):
+    def __init__(
+        self,
+        name: str,
+        on_complete: Callable[[str], None] | None = None,
+        env=None,
+    ):
         self.name = name
         self.on_complete = on_complete
+        self.env = env
 
         self._thread: threading.Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -220,6 +226,18 @@ class Provisioning:
         if not ip:
             self._publish_status(b"failed")
             return
+        # Tek-ağ politikası: credentials'ı env.json'a kalıcı yaz ve diğer
+        # NetworkManager Wi-Fi profillerini unut.
+        if self.env is not None:
+            try:
+                self.env.set("wifi.ssid", ssid)
+                self.env.set("wifi.password", password)
+            except Exception:
+                pass
+        try:
+            wifi.forget_others(keep_ssid=ssid)
+        except Exception:
+            pass
         self._publish_status(b"connected")
         # IP'yi notify etmeden önce HTTP server / mDNS hazır olsun.
         # Aksi halde telefon hemen disconnect olup configure ekranında

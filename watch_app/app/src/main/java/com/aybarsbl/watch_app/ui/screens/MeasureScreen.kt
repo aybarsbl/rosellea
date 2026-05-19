@@ -13,7 +13,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.ButtonDefaults
+import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 import com.aybarsbl.watch_app.data.AppState
 import com.aybarsbl.watch_app.presentation.theme.RoselleaAccent
@@ -60,8 +60,6 @@ fun MeasureScreen() {
     val context = LocalContext.current
     val bpm by AppState.hrBpm.collectAsState()
     val running by AppState.running.collectAsState()
-    val lastSendOk by AppState.lastSendOk.collectAsState()
-    val lastSendAt by AppState.lastSendAt.collectAsState()
     val lastHrAt by AppState.lastHrUpdateAt.collectAsState()
     var statusMsg by remember { mutableStateOf("") }
     val now = remember { mutableStateOf(System.currentTimeMillis()) }
@@ -121,15 +119,16 @@ fun MeasureScreen() {
     val scrollState = rememberScrollState()
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
-    Box(
+    ScreenScaffold(
+        scrollState = scrollState,
         modifier = Modifier
             .fillMaxSize()
-            .background(RoselleaBgDeep)
-            .padding(horizontal = 28.dp, vertical = 24.dp),
+            .background(RoselleaBgDeep),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .padding(start = 28.dp, end = 28.dp, top = 40.dp, bottom = 24.dp)
                 .rotaryScrollable(
                     behavior = RotaryScrollableDefaults.behavior(
                         scrollableState = scrollState,
@@ -143,7 +142,7 @@ fun MeasureScreen() {
             Text(
                 text = "Rosellea",
                 color = RoselleaTextPrimary,
-                fontSize = 14.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold,
             )
 
@@ -167,14 +166,6 @@ fun MeasureScreen() {
                     Text(
                         text = statusMsg,
                         color = RoselleaTextSecondary,
-                        fontSize = 10.sp,
-                    )
-                } else if (running && lastSendAt > 0L) {
-                    Text(
-                        text = if (lastSendOk) "Telefona gönderildi"
-                               else "Telefon bulunamadı",
-                        color = if (lastSendOk) RoselleaTextSecondary
-                                else RoselleaDanger,
                         fontSize = 10.sp,
                     )
                 }

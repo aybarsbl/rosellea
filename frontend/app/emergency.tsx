@@ -108,6 +108,11 @@ export default function EmergencyScreen() {
   useEffect(() => {
     const unsub = subscribe((e) => {
       if (e.type === "emergency.armed") {
+        // SSE reconnect'lerde aynı started_at ile tekrar gelen armed event
+        // countdown'ı resetlemesin — kullanıcı için modal "yeniden açılmış"
+        // gibi gözüküyor.
+        const at = e.started_at ?? 0;
+        if (at && at === startedAtRef.current) return;
         if (e.countdown_s) countdownRef.current = e.countdown_s;
         if (e.started_at) startedAtRef.current = e.started_at;
         if ((e as any).source) setEmergencySource((e as any).source);

@@ -32,6 +32,9 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false);
   const router = useRouter();
   const armedRouted = useRef(false);
+  // Backend SSE reconnect'lerde aynı emergency.armed event'i tekrar yayılabiliyor.
+  // started_at timestamp'iyle aynı armed'i ikinci kez gelirse yoksay.
+  const lastArmedAtRef = useRef<number>(0);
 
   useEffect(() => {
     // Cold-start sırasında AsyncStorage'tan acil durum context'ini (host,
@@ -51,6 +54,9 @@ export default function RootLayout() {
   useEffect(() => {
     const unsub = subscribe((e) => {
       if (e.type === "emergency.armed") {
+        const at = e.started_at ?? 0;
+        if (at && at === lastArmedAtRef.current) return;
+        lastArmedAtRef.current = at;
         if (!armedRouted.current) {
           armedRouted.current = true;
           router.push("/emergency" as any);
@@ -61,6 +67,7 @@ export default function RootLayout() {
         e.type === "emergency.sent"
       ) {
         armedRouted.current = false;
+        lastArmedAtRef.current = 0;
       }
     });
     return () => unsub();

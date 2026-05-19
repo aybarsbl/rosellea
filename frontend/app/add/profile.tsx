@@ -24,7 +24,6 @@ const ALL_FIELDS: FieldKey[] = [
   "assistantModel",
   "whisperModel",
   "elabsModel",
-  "elabsOutput",
   "elabsVoice",
   "speakerVolume",
   "micGain",

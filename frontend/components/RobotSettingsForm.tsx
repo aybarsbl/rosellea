@@ -17,6 +17,7 @@ import {
   EnvPatch,
 } from "../lib/api";
 import { Contact, EnvOptions } from "../lib/envTypes";
+import { CollapsibleCard } from "./CollapsibleCard";
 import { ContactsEditor } from "./ContactsEditor";
 import { Dropdown } from "./Dropdown";
 
@@ -30,7 +31,6 @@ export type FieldKey =
   | "assistantModel"
   | "whisperModel"
   | "elabsModel"
-  | "elabsOutput"
   | "elabsVoice"
   | "speakerVolume"
   | "micGain"
@@ -114,7 +114,6 @@ export function RobotSettingsForm({
   const initialAssistantModel = useMemo(() => asString(getByPath(initial, "assistant.model")), [initial]);
   const initialWhisperModel = useMemo(() => asString(getByPath(initial, "whisper.model")), [initial]);
   const initialElabsModel = useMemo(() => asString(getByPath(initial, "elabs.model")), [initial]);
-  const initialElabsOutput = useMemo(() => asString(getByPath(initial, "elabs.output")), [initial]);
   const initialElabsVoice = useMemo(() => asString(getByPath(initial, "elabs.voice")), [initial]);
   const initialSpeakerVolume = useMemo(
     () => asNumber(getByPath(initial, "speaker.volume")) ?? 60,
@@ -182,7 +181,6 @@ export function RobotSettingsForm({
   const assistantModelOptions = useMemo(() => asOptions(getByPath(initial, "openai.models")), [initial]);
   const whisperModelOptions = useMemo(() => asOptions(getByPath(initial, "whisper.models")), [initial]);
   const elabsModelOptions = useMemo(() => asOptions(getByPath(initial, "elabs.models")), [initial]);
-  const elabsOutputOptions = useMemo(() => asOptions(getByPath(initial, "elabs.outputs")), [initial]);
   const elabsVoiceOptions = useMemo(() => asOptions(getByPath(initial, "elabs.voices")), [initial]);
 
   const [name, setName] = useState(initialName);
@@ -194,8 +192,9 @@ export function RobotSettingsForm({
   const [assistantModel, setAssistantModel] = useState(initialAssistantModel);
   const [whisperModel, setWhisperModel] = useState(initialWhisperModel);
   const [elabsModel, setElabsModel] = useState(initialElabsModel);
-  const [elabsOutput, setElabsOutput] = useState(initialElabsOutput);
   const [elabsVoice, setElabsVoice] = useState(initialElabsVoice);
+  const [smokeOpen, setSmokeOpen] = useState(false);
+  const [hrOpen, setHrOpen] = useState(false);
   const [speakerVolume, setSpeakerVolume] = useState(initialSpeakerVolume);
   const [micGain, setMicGain] = useState(initialMicGain);
   const [safetyEnabled, setSafetyEnabled] = useState(initialSafetyEnabled);
@@ -277,9 +276,6 @@ export function RobotSettingsForm({
     }
     if (has("elabsModel") && elabsModel && elabsModel !== initialElabsModel) {
       patches.push({ key: "elabs.model", value: elabsModel });
-    }
-    if (has("elabsOutput") && elabsOutput && elabsOutput !== initialElabsOutput) {
-      patches.push({ key: "elabs.output", value: elabsOutput });
     }
     if (has("elabsVoice") && elabsVoice && elabsVoice !== initialElabsVoice) {
       patches.push({ key: "elabs.voice", value: elabsVoice });
@@ -505,15 +501,6 @@ export function RobotSettingsForm({
         />
       )}
 
-      {has("elabsOutput") && (
-        <Dropdown
-          label="Ses Kalitesi"
-          options={elabsOutputOptions}
-          value={elabsOutput}
-          onChange={setElabsOutput}
-        />
-      )}
-
       {has("elabsVoice") && (
         <Dropdown
           label="Ses"
@@ -555,186 +542,209 @@ export function RobotSettingsForm({
         </View>
       )}
 
-      {has("safetyEnabled") && (
-        <View style={styles.safetyHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.fieldLabel}>Yangın/Duman İzleyici</Text>
-            <Text style={styles.helper}>
-              MQ-2 duman sensörünü dinler. Eşik aşılırsa robot anons yapar ve
-              telefon kişilere SMS gönderir.
-            </Text>
-          </View>
-          <Switch
-            value={safetyEnabled}
-            onValueChange={setSafetyEnabled}
-            trackColor={{ false: "#1e293b", true: "#15803d" }}
-            thumbColor={safetyEnabled ? "#22c55e" : "#475569"}
-          />
-        </View>
+      {(has("safetyEnabled") || has("smokeThreshold") || has("smsTemplate")) && (
+        <CollapsibleCard
+          title="Yangın / Duman İzleyici"
+          open={smokeOpen}
+          onToggle={() => setSmokeOpen((v) => !v)}
+        >
+          {has("safetyEnabled") && (
+            <View style={styles.safetyHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>Yangın/Duman İzleyici</Text>
+                <Text style={styles.helper}>
+                  MQ-2 duman sensörünü dinler. Eşik aşılırsa robot anons yapar ve
+                  telefon kişilere SMS gönderir.
+                </Text>
+              </View>
+              <Switch
+                value={safetyEnabled}
+                onValueChange={setSafetyEnabled}
+                trackColor={{ false: "#1e293b", true: "#15803d" }}
+                thumbColor={safetyEnabled ? "#22c55e" : "#475569"}
+              />
+            </View>
+          )}
+
+          {has("smokeThreshold") && (
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Duman Eşiği (ham ADC değeri)</Text>
+              <TextInput
+                value={smokeThreshold}
+                onChangeText={setSmokeThreshold}
+                placeholder="örn. 18000"
+                placeholderTextColor="#475569"
+                keyboardType="number-pad"
+                style={[styles.input, { outline: "none" } as any]}
+              />
+              <Text style={styles.helper}>
+                ADS1115 16-bit ham okuma. MQ-2 ortamda ~3000-5000, dumanda 18000+'a
+                çıkar. Kalibrasyon için robot detayındaki canlı değeri izle.
+              </Text>
+            </View>
+          )}
+
+          {has("smsTemplate") && (
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Acil Durum SMS Şablonu</Text>
+              <TextInput
+                value={smsTemplate}
+                onChangeText={setSmsTemplate}
+                placeholder="ACIL DURUM: ..."
+                placeholderTextColor="#475569"
+                multiline
+                numberOfLines={3}
+                style={[styles.input, styles.multiline, { outline: "none" } as any]}
+              />
+              <Text style={styles.helper}>
+                Geri sayım iptal edilmezse bağlı tüm kişilere bu mesaj gönderilir.
+              </Text>
+            </View>
+          )}
+        </CollapsibleCard>
       )}
 
-      {has("smokeThreshold") && (
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Duman Eşiği (ham ADC değeri)</Text>
-          <TextInput
-            value={smokeThreshold}
-            onChangeText={setSmokeThreshold}
-            placeholder="örn. 18000"
-            placeholderTextColor="#475569"
-            keyboardType="number-pad"
-            style={[styles.input, { outline: "none" } as any]}
-          />
-          <Text style={styles.helper}>
-            ADS1115 16-bit ham okuma. MQ-2 ortamda ~3000-5000, dumanda 18000+'a
-            çıkar. Kalibrasyon için robot detayındaki canlı değeri izle.
-          </Text>
-        </View>
-      )}
+      {(has("hrEnabled") ||
+        has("hrLowBpm") ||
+        has("hrHighBpm") ||
+        has("hrLowSeconds") ||
+        has("hrHighSeconds") ||
+        has("hrSuddenChangeBpm") ||
+        has("hrSuddenChangeWindowS") ||
+        has("hrSmsTemplate")) && (
+        <CollapsibleCard
+          title="Kalp Ritmi İzleyici"
+          open={hrOpen}
+          onToggle={() => setHrOpen((v) => !v)}
+        >
+          {has("hrEnabled") && (
+            <View style={styles.safetyHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>Kalp Ritmi İzleyici</Text>
+                <Text style={styles.helper}>
+                  Saatten gelen BPM örneklerini değerlendirir. Eşik aşılırsa robot
+                  anons yapar ve telefon kişilere SMS gönderir.
+                </Text>
+              </View>
+              <Switch
+                value={hrEnabled}
+                onValueChange={setHrEnabled}
+                trackColor={{ false: "#1e293b", true: "#15803d" }}
+                thumbColor={hrEnabled ? "#22c55e" : "#475569"}
+              />
+            </View>
+          )}
 
-      {has("smsTemplate") && (
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Acil Durum SMS Şablonu</Text>
-          <TextInput
-            value={smsTemplate}
-            onChangeText={setSmsTemplate}
-            placeholder="ACIL DURUM: ..."
-            placeholderTextColor="#475569"
-            multiline
-            numberOfLines={3}
-            style={[styles.input, styles.multiline, { outline: "none" } as any]}
-          />
-          <Text style={styles.helper}>
-            Geri sayım iptal edilmezse bağlı tüm kişilere bu mesaj gönderilir.
-          </Text>
-        </View>
-      )}
+          {has("hrLowBpm") && (
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Min BPM (alt eşik)</Text>
+              <TextInput
+                value={hrLowBpm}
+                onChangeText={setHrLowBpm}
+                placeholder="örn. 40"
+                placeholderTextColor="#475569"
+                keyboardType="number-pad"
+                style={[styles.input, { outline: "none" } as any]}
+              />
+              <Text style={styles.helper}>
+                Bilekte ölçülen BPM bu değerin altına düşerse ve alt süre eşiği
+                kadar sürerse alarm tetiklenir.
+              </Text>
+            </View>
+          )}
 
-      {has("hrEnabled") && (
-        <View style={styles.safetyHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.fieldLabel}>Kalp Ritmi İzleyici</Text>
-            <Text style={styles.helper}>
-              Saatten gelen BPM örneklerini değerlendirir. Eşik aşılırsa robot
-              anons yapar ve telefon kişilere SMS gönderir.
-            </Text>
-          </View>
-          <Switch
-            value={hrEnabled}
-            onValueChange={setHrEnabled}
-            trackColor={{ false: "#1e293b", true: "#15803d" }}
-            thumbColor={hrEnabled ? "#22c55e" : "#475569"}
-          />
-        </View>
-      )}
+          {has("hrHighBpm") && (
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Max BPM (üst eşik)</Text>
+              <TextInput
+                value={hrHighBpm}
+                onChangeText={setHrHighBpm}
+                placeholder="örn. 130"
+                placeholderTextColor="#475569"
+                keyboardType="number-pad"
+                style={[styles.input, { outline: "none" } as any]}
+              />
+              <Text style={styles.helper}>
+                Bilekte ölçülen BPM bu değerin üstüne çıkarsa ve üst süre eşiği
+                kadar sürerse alarm tetiklenir.
+              </Text>
+            </View>
+          )}
 
-      {has("hrLowBpm") && (
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Min BPM (alt eşik)</Text>
-          <TextInput
-            value={hrLowBpm}
-            onChangeText={setHrLowBpm}
-            placeholder="örn. 40"
-            placeholderTextColor="#475569"
-            keyboardType="number-pad"
-            style={[styles.input, { outline: "none" } as any]}
-          />
-          <Text style={styles.helper}>
-            Bilekte ölçülen BPM bu değerin altına düşerse ve alt süre eşiği
-            kadar sürerse alarm tetiklenir.
-          </Text>
-        </View>
-      )}
+          {has("hrLowSeconds") && (
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Alt eşik süresi (sn)</Text>
+              <TextInput
+                value={hrLowSeconds}
+                onChangeText={setHrLowSeconds}
+                placeholder="örn. 15"
+                placeholderTextColor="#475569"
+                keyboardType="number-pad"
+                style={[styles.input, { outline: "none" } as any]}
+              />
+            </View>
+          )}
 
-      {has("hrHighBpm") && (
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Max BPM (üst eşik)</Text>
-          <TextInput
-            value={hrHighBpm}
-            onChangeText={setHrHighBpm}
-            placeholder="örn. 130"
-            placeholderTextColor="#475569"
-            keyboardType="number-pad"
-            style={[styles.input, { outline: "none" } as any]}
-          />
-          <Text style={styles.helper}>
-            Bilekte ölçülen BPM bu değerin üstüne çıkarsa ve üst süre eşiği
-            kadar sürerse alarm tetiklenir.
-          </Text>
-        </View>
-      )}
+          {has("hrHighSeconds") && (
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Üst eşik süresi (sn)</Text>
+              <TextInput
+                value={hrHighSeconds}
+                onChangeText={setHrHighSeconds}
+                placeholder="örn. 30"
+                placeholderTextColor="#475569"
+                keyboardType="number-pad"
+                style={[styles.input, { outline: "none" } as any]}
+              />
+            </View>
+          )}
 
-      {has("hrLowSeconds") && (
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Alt eşik süresi (sn)</Text>
-          <TextInput
-            value={hrLowSeconds}
-            onChangeText={setHrLowSeconds}
-            placeholder="örn. 15"
-            placeholderTextColor="#475569"
-            keyboardType="number-pad"
-            style={[styles.input, { outline: "none" } as any]}
-          />
-        </View>
-      )}
+          {has("hrSuddenChangeBpm") && (
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Ani değişim BPM eşiği</Text>
+              <TextInput
+                value={hrSuddenChangeBpm}
+                onChangeText={setHrSuddenChangeBpm}
+                placeholder="örn. 30"
+                placeholderTextColor="#475569"
+                keyboardType="number-pad"
+                style={[styles.input, { outline: "none" } as any]}
+              />
+              <Text style={styles.helper}>
+                Aşağıdaki pencerede max-min farkı bu değeri aşarsa alarm tetiklenir.
+              </Text>
+            </View>
+          )}
 
-      {has("hrHighSeconds") && (
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Üst eşik süresi (sn)</Text>
-          <TextInput
-            value={hrHighSeconds}
-            onChangeText={setHrHighSeconds}
-            placeholder="örn. 30"
-            placeholderTextColor="#475569"
-            keyboardType="number-pad"
-            style={[styles.input, { outline: "none" } as any]}
-          />
-        </View>
-      )}
+          {has("hrSuddenChangeWindowS") && (
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Ani değişim penceresi (sn)</Text>
+              <TextInput
+                value={hrSuddenChangeWindowS}
+                onChangeText={setHrSuddenChangeWindowS}
+                placeholder="örn. 30"
+                placeholderTextColor="#475569"
+                keyboardType="number-pad"
+                style={[styles.input, { outline: "none" } as any]}
+              />
+            </View>
+          )}
 
-      {has("hrSuddenChangeBpm") && (
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Ani değişim BPM eşiği</Text>
-          <TextInput
-            value={hrSuddenChangeBpm}
-            onChangeText={setHrSuddenChangeBpm}
-            placeholder="örn. 30"
-            placeholderTextColor="#475569"
-            keyboardType="number-pad"
-            style={[styles.input, { outline: "none" } as any]}
-          />
-          <Text style={styles.helper}>
-            Aşağıdaki pencerede max-min farkı bu değeri aşarsa alarm tetiklenir.
-          </Text>
-        </View>
-      )}
-
-      {has("hrSuddenChangeWindowS") && (
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Ani değişim penceresi (sn)</Text>
-          <TextInput
-            value={hrSuddenChangeWindowS}
-            onChangeText={setHrSuddenChangeWindowS}
-            placeholder="örn. 30"
-            placeholderTextColor="#475569"
-            keyboardType="number-pad"
-            style={[styles.input, { outline: "none" } as any]}
-          />
-        </View>
-      )}
-
-      {has("hrSmsTemplate") && (
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>Kalp Ritmi SMS Şablonu</Text>
-          <TextInput
-            value={hrSmsTemplate}
-            onChangeText={setHrSmsTemplate}
-            placeholder="ACIL DURUM: ..."
-            placeholderTextColor="#475569"
-            multiline
-            numberOfLines={3}
-            style={[styles.input, styles.multiline, { outline: "none" } as any]}
-          />
-        </View>
+          {has("hrSmsTemplate") && (
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Kalp Ritmi SMS Şablonu</Text>
+              <TextInput
+                value={hrSmsTemplate}
+                onChangeText={setHrSmsTemplate}
+                placeholder="ACIL DURUM: ..."
+                placeholderTextColor="#475569"
+                multiline
+                numberOfLines={3}
+                style={[styles.input, styles.multiline, { outline: "none" } as any]}
+              />
+            </View>
+          )}
+        </CollapsibleCard>
       )}
 
       {error && <Text style={styles.error}>{error}</Text>}
